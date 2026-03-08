@@ -1,7 +1,7 @@
 import { Sandbox } from "e2b";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { getAgentRunForViewer, requestAgentRunCancellation } from "@/lib/db/agent-runs";
+import { getAgentRunForOwner, requestAgentRunCancellation } from "@/lib/db/agent-runs";
 import { env } from "@/lib/env";
 
 export async function POST(
@@ -16,7 +16,7 @@ export async function POST(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const run = await getAgentRunForViewer({ runId, userId });
+  const run = await getAgentRunForOwner({ runId, userId });
   if (!run) {
     return new Response("Not found", { status: 404 });
   }

@@ -37,7 +37,10 @@ import { config } from "@/lib/config";
 import { createAnonymousSession } from "@/lib/create-anonymous-session";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
 import { canSpend, deductCredits } from "@/lib/db/credits";
-import { createAgentRun } from "@/lib/db/agent-runs";
+import {
+  createAgentRun,
+  createCancelledAgentRun,
+} from "@/lib/db/agent-runs";
 import { getMcpConnectorsByUserId } from "@/lib/db/mcp-queries";
 import {
   getChatById,
@@ -48,8 +51,10 @@ import {
   saveChat,
   saveMessage,
   updateMessage,
+  updateMessageCanceledAt,
   updateMessageActiveStreamId,
 } from "@/lib/db/queries";
+import { consumePendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import type { McpConnector } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { MAX_INPUT_TOKENS } from "@/lib/limits/tokens";
@@ -817,6 +822,7 @@ export async function POST(request: NextRequest) {
 
     const { userId, isAnonymous, anonymousSession, modelDefinition } =
       sessionSetup;
+    const backgroundChatEnabled = Boolean(userId) && isBackgroundChatEnabled();
 
     const selectedTool = normalizedUserMessage.metadata.selectedTool ?? null;
     let isNewChat = false;
@@ -844,16 +850,33 @@ export async function POST(request: NextRequest) {
     const explicitlyRequestedTools =
       determineExplicitlyRequestedTools(selectedTool);
 
-    if (userId && isBackgroundChatEnabled()) {
+    const pendingCancellationRequested =
+      userId && backgroundChatEnabled
+        ? await consumePendingMessageCancellation({
+            chatId,
+            messageId: normalizedUserMessage.id,
+            userId,
+          })
+        : false;
+
+    if (pendingCancellationRequested) {
+      await updateMessageCanceledAt({
+        messageId: normalizedUserMessage.id,
+        canceledAt: new Date(),
+      });
+    }
+
+    if (userId && backgroundChatEnabled) {
       const assistantMessageId = generateUUID();
+      const queuedAt = new Date().toISOString();
       const placeholderAssistantMessage: ChatMessage = {
         id: assistantMessageId,
         role: "assistant",
         parts: [
           buildRunStatusPart({
-            label: "Queued...",
+            label: pendingCancellationRequested ? "Cancelled" : "Queued...",
             phase: "queued",
-            startedAt: new Date().toISOString(),
+            startedAt: queuedAt,
           }),
         ],
         metadata: {
@@ -872,7 +895,10 @@ export async function POST(request: NextRequest) {
         message: placeholderAssistantMessage,
       });
 
-      const run = await createAgentRun({
+      const runFactory = pendingCancellationRequested
+        ? createCancelledAgentRun
+        : createAgentRun;
+      const run = await runFactory({
         assistantMessageId,
         chatId,
         requestedTools: explicitlyRequestedTools,
@@ -887,7 +913,7 @@ export async function POST(request: NextRequest) {
             ...placeholderAssistantMessage,
             metadata: {
               ...placeholderAssistantMessage.metadata,
-              activeRunId: run.id,
+              activeRunId: pendingCancellationRequested ? null : run.id,
             },
           },
           assistantMessageId,

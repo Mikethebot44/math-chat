@@ -26,6 +26,7 @@ import {
   updateMessageCanceledAt,
 } from "@/lib/db/queries";
 import { requestAgentRunCancellation } from "@/lib/db/agent-runs";
+import { rememberPendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import { isBackgroundChatEnabled } from "@/lib/agent-runs/config";
 import { MAX_MESSAGE_CHARS } from "@/lib/limits/tokens";
 import { dbChatToUIChat } from "@/lib/message-conversion";
@@ -197,23 +198,33 @@ export const chatRouter = createTRPCRouter({
   stopStream: protectedProcedure
     .input(
       z.object({
+        chatId: z.string().uuid(),
         messageId: z.string().uuid(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [msg] = await getMessageById({ id: input.messageId });
-      if (!msg) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Message not found",
-        });
-      }
-
-      const chat = await getChatById({ id: msg.chatId });
-      if (!chat || chat.userId !== ctx.user.id) {
+      const chat = await getChatById({ id: input.chatId });
+      if (chat && chat.userId !== ctx.user.id) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Chat not found or access denied",
+        });
+      }
+
+      const [msg] = await getMessageById({ id: input.messageId });
+      if (!msg) {
+        await rememberPendingMessageCancellation({
+          chatId: input.chatId,
+          messageId: input.messageId,
+          userId: ctx.user.id,
+        });
+        return { success: true };
+      }
+
+      if (msg.chatId !== input.chatId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Message not found",
         });
       }
 
@@ -224,6 +235,12 @@ export const chatRouter = createTRPCRouter({
 
       if (msg.activeRunId) {
         await requestAgentRunCancellation({ runId: msg.activeRunId });
+      } else {
+        await rememberPendingMessageCancellation({
+          chatId: msg.chatId,
+          messageId: input.messageId,
+          userId: ctx.user.id,
+        });
       }
 
       return { success: true };

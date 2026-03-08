@@ -1,18 +1,16 @@
 "use client";
 
 import { useChatActions, useChatStatus } from "@ai-sdk-tools/store";
-import { useQuery } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import type { ChatMessage } from "@/lib/ai/types";
 import {
   findPendingAristotleSourceMessage,
   useMessages,
 } from "@/lib/stores/hooks-base";
 import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
-import { useSession } from "@/providers/session-provider";
-import { useTRPC } from "@/trpc/react";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -152,23 +150,16 @@ async function pollAristotleContinuation({
 }
 
 export function AristotleContinuationManager({ chatId }: { chatId: string }) {
-  const { data: session } = useSession();
-  const trpc = useTRPC();
-  const { data: runtimeConfig } = useQuery({
-    ...trpc.chat.getRuntimeConfig.queryOptions(),
-    enabled: !!session?.user,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const { backgroundChatEnabled, isAuthenticated, isRuntimeConfigResolved } =
+    useBackgroundChatConfig();
   const status = useChatStatus();
   const messages = useMessages() as ChatMessage[];
   const { setMessages } = useChatActions<ChatMessage>();
   const addMessageToTree = useAddMessageToTree();
   const activeMessageIdRef = useRef<string | null>(null);
   const messagesRef = useRef(messages);
-  const isContinuationEnabled = !(
-    session?.user &&
-    runtimeConfig?.backgroundChatEnabled === true
-  );
+  const isContinuationEnabled =
+    !isAuthenticated || (isRuntimeConfigResolved && !backgroundChatEnabled);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -176,10 +167,11 @@ export function AristotleContinuationManager({ chatId }: { chatId: string }) {
 
   const pendingMessage = useMemo(
     () =>
-      isContinuationEnabled ? findPendingAristotleSourceMessage(messages) : null,
+      isContinuationEnabled
+        ? findPendingAristotleSourceMessage(messages)
+        : null,
     [isContinuationEnabled, messages]
   );
-  const pendingMessageId = pendingMessage?.id ?? null;
 
   useEffect(() => {
     if (!pendingMessage || status !== "ready") {
@@ -218,13 +210,7 @@ export function AristotleContinuationManager({ chatId }: { chatId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [
-    addMessageToTree,
-    chatId,
-    pendingMessageId,
-    setMessages,
-    status,
-  ]);
+  }, [addMessageToTree, chatId, pendingMessage, setMessages, status]);
 
   if (!isContinuationEnabled) {
     return null;

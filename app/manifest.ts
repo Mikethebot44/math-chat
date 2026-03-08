@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import iconLight from "@/app/icon-light.png";
 import { config } from "@/lib/config";
 
 export default function manifest(): MetadataRoute.Manifest {
@@ -12,9 +13,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#fff",
     icons: [
       {
-        src: "/icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: iconLight.src,
+        sizes: "500x500",
+        type: "image/png",
       },
     ],
   };

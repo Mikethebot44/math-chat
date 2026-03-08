@@ -1,4 +1,12 @@
-import { Copy, List, MessageSquare, Play, Redo2, Undo2 } from "lucide-react";
+import {
+  Copy,
+  Download,
+  List,
+  MessageSquare,
+  Play,
+  Redo2,
+  Undo2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { CodeEditor } from "@/components/code-editor";
 import {
@@ -8,6 +16,7 @@ import {
 } from "@/components/console";
 import { Artifact } from "@/components/create-artifact";
 import { config } from "@/lib/config";
+import { env } from "@/lib/env";
 import { generateUUID, getLanguageFromFileName } from "@/lib/utils";
 
 const OUTPUT_HANDLERS = {
@@ -58,21 +67,152 @@ function detectRequiredHandlers(code: string): string[] {
 
 interface Metadata {
   language: string;
+  leanSandboxId: string | null;
   outputs: ConsoleOutput[];
+}
+
+interface LeanRunResponse {
+  command: string;
+  containsHoles: boolean;
+  diagnostics: string;
+  exitCode: number;
+  filePath: string;
+  reusedSandbox: boolean;
+  sandboxId: string;
+  stderr: string;
+  stdout: string;
+  verified: boolean;
+}
+
+const DEFAULT_LANGUAGE = "python";
+const IS_LEAN_RUN_ENABLED = env.NEXT_PUBLIC_LEAN_RUN_ENABLED !== "false";
+
+function createDefaultMetadata(language = DEFAULT_LANGUAGE): Metadata {
+  return {
+    outputs: [],
+    language,
+    leanSandboxId: null,
+  };
+}
+
+function ensureMetadata(
+  metadata: Metadata | null | undefined,
+  language = DEFAULT_LANGUAGE
+): Metadata {
+  return {
+    ...createDefaultMetadata(language),
+    ...metadata,
+    language: metadata?.language ?? language,
+    leanSandboxId: metadata?.leanSandboxId ?? null,
+    outputs: metadata?.outputs ?? [],
+  };
+}
+
+function replaceConsoleOutput({
+  metadata,
+  runId,
+  nextOutput,
+}: {
+  metadata: Metadata | null | undefined;
+  runId: string;
+  nextOutput: ConsoleOutput;
+}): Metadata {
+  const currentMetadata = ensureMetadata(metadata);
+
+  return {
+    ...currentMetadata,
+    outputs: [
+      ...currentMetadata.outputs.filter((output) => output.id !== runId),
+      nextOutput,
+    ],
+  };
+}
+
+function isRunnableLanguage(language: string): boolean {
+  if (language === "lean") {
+    return IS_LEAN_RUN_ENABLED;
+  }
+
+  return language === "python";
+}
+
+async function runLeanCode({
+  content,
+  fileName,
+  sandboxId,
+}: {
+  content: string;
+  fileName: string;
+  sandboxId: string | null;
+}): Promise<LeanRunResponse> {
+  const response = await fetch("/api/lean/run", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      content,
+      fileName,
+      sandboxId,
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | LeanRunResponse
+    | { error?: string }
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      payload && "error" in payload && typeof payload.error === "string"
+        ? payload.error
+        : "Failed to run Lean file"
+    );
+  }
+
+  return payload as LeanRunResponse;
+}
+
+function formatLeanRunOutput(result: LeanRunResponse): string {
+  let statusSummary = "Lean reported errors.";
+
+  if (result.exitCode === 0) {
+    statusSummary = result.verified
+      ? "Lean check passed."
+      : "Lean compiled, but the file still contains holes such as `sorry` or `_`.";
+  }
+
+  const sections: string[] = [
+    statusSummary,
+    result.reusedSandbox
+      ? "Reused the existing Lean sandbox."
+      : "Started a new Lean sandbox from the prebuilt template.",
+    `Command: ${result.command}`,
+    `File: ${result.filePath}`,
+  ];
+
+  if (result.stdout.trim()) {
+    sections.push(`stdout:\n${result.stdout.trim()}`);
+  }
+
+  if (result.stderr.trim()) {
+    sections.push(`stderr:\n${result.stderr.trim()}`);
+  } else if (result.diagnostics.trim()) {
+    sections.push(`output:\n${result.diagnostics.trim()}`);
+  }
+
+  return sections.join("\n\n");
 }
 
 export const codeArtifact = new Artifact<"code", Metadata>({
   kind: "code",
   description:
-    "Useful for code generation; Code execution is only available for Python code.",
+    "Useful for code generation; Code execution is available for Python and Lean code.",
   initialize: ({ setMetadata }) => {
-    setMetadata({
-      outputs: [],
-      language: "python",
-    });
+    setMetadata(createDefaultMetadata());
   },
   content: ({ isReadonly, content, title, ...props }) => {
-    const language = getLanguageFromFileName(title) || "python";
+    const language = getLanguageFromFileName(title) || DEFAULT_LANGUAGE;
 
     return (
       <CodeEditor
@@ -93,10 +233,10 @@ export const codeArtifact = new Artifact<"code", Metadata>({
         className="min-h-[200px]"
         consoleOutputs={metadata.outputs}
         setConsoleOutputs={() => {
-          setMetadata({
-            ...metadata,
+          setMetadata((currentMetadata) => ({
+            ...ensureMetadata(currentMetadata),
             outputs: [],
-          });
+          }));
         }}
       />
     );
@@ -106,14 +246,83 @@ export const codeArtifact = new Artifact<"code", Metadata>({
       icon: <Play size={18} />,
       label: "Run",
       description: "Execute code",
-      onClick: async ({ content, setMetadata, metadata: _metadata }) => {
+      isHidden: ({ title }) => {
+        const language = getLanguageFromFileName(title) || DEFAULT_LANGUAGE;
+        return language === "lean" && !IS_LEAN_RUN_ENABLED;
+      },
+      onClick: async ({ content, setMetadata, metadata, title }) => {
+        const language = getLanguageFromFileName(title) || DEFAULT_LANGUAGE;
         const runId = generateUUID();
         const outputContent: ConsoleOutputContent[] = [];
 
-        setMetadata((metadata) => ({
-          ...metadata,
+        if (language === "lean") {
+          const currentMetadata = ensureMetadata(metadata, language);
+          const pendingMessage = currentMetadata.leanSandboxId
+            ? "Reconnecting to the Lean sandbox..."
+            : "Starting the Lean sandbox from the prebuilt template...";
+
+          setMetadata((currentMetadata) => ({
+            ...ensureMetadata(currentMetadata, language),
+            outputs: [
+              ...ensureMetadata(currentMetadata, language).outputs,
+              {
+                id: runId,
+                contents: [{ type: "text", value: pendingMessage }],
+                status: "loading_packages",
+              },
+            ],
+          }));
+
+          try {
+            const result = await runLeanCode({
+              content,
+              fileName: title,
+              sandboxId: currentMetadata.leanSandboxId,
+            });
+
+            setMetadata((currentMetadata) => {
+              const nextMetadata = replaceConsoleOutput({
+                metadata: ensureMetadata(currentMetadata, language),
+                runId,
+                nextOutput: {
+                  id: runId,
+                  contents: [
+                    {
+                      type: "text",
+                      value: formatLeanRunOutput(result),
+                    },
+                  ],
+                  status: result.exitCode === 0 ? "completed" : "failed",
+                },
+              });
+
+              return {
+                ...nextMetadata,
+                language,
+                leanSandboxId: result.sandboxId,
+              };
+            });
+          } catch (error: any) {
+            setMetadata((currentMetadata) =>
+              replaceConsoleOutput({
+                metadata: ensureMetadata(currentMetadata, language),
+                runId,
+                nextOutput: {
+                  id: runId,
+                  contents: [{ type: "text", value: error.message }],
+                  status: "failed",
+                },
+              })
+            );
+          }
+
+          return;
+        }
+
+        setMetadata((currentMetadata) => ({
+          ...ensureMetadata(currentMetadata, language),
           outputs: [
-            ...metadata.outputs,
+            ...ensureMetadata(currentMetadata, language).outputs,
             {
               id: runId,
               contents: [],
@@ -142,17 +351,17 @@ export const codeArtifact = new Artifact<"code", Metadata>({
 
           await currentPyodideInstance.loadPackagesFromImports(content, {
             messageCallback: (message: string) => {
-              setMetadata((metadata) => ({
-                ...metadata,
-                outputs: [
-                  ...metadata.outputs.filter((output) => output.id !== runId),
-                  {
+              setMetadata((currentMetadata) =>
+                replaceConsoleOutput({
+                  metadata: ensureMetadata(currentMetadata, language),
+                  runId,
+                  nextOutput: {
                     id: runId,
                     contents: [{ type: "text", value: message }],
                     status: "loading_packages",
                   },
-                ],
-              }));
+                })
+              );
             },
           });
 
@@ -173,37 +382,37 @@ export const codeArtifact = new Artifact<"code", Metadata>({
 
           await currentPyodideInstance.runPythonAsync(content);
 
-          setMetadata((metadata) => ({
-            ...metadata,
-            outputs: [
-              ...metadata.outputs.filter((output) => output.id !== runId),
-              {
+          setMetadata((currentMetadata) =>
+            replaceConsoleOutput({
+              metadata: ensureMetadata(currentMetadata, language),
+              runId,
+              nextOutput: {
                 id: runId,
                 contents: outputContent,
                 status: "completed",
               },
-            ],
-          }));
+            })
+          );
         } catch (error: any) {
-          setMetadata((metadata) => ({
-            ...metadata,
-            outputs: [
-              ...metadata.outputs.filter((output) => output.id !== runId),
-              {
+          setMetadata((currentMetadata) =>
+            replaceConsoleOutput({
+              metadata: ensureMetadata(currentMetadata, language),
+              runId,
+              nextOutput: {
                 id: runId,
                 contents: [{ type: "text", value: error.message }],
                 status: "failed",
               },
-            ],
-          }));
+            })
+          );
         }
       },
-      isDisabled: ({ isReadonly, content: _content, metadata }) => {
+      isDisabled: ({ isReadonly, title }) => {
         if (isReadonly) {
           return true;
         }
-        const language = metadata?.language || "python";
-        return language !== "python";
+        const language = getLanguageFromFileName(title) || DEFAULT_LANGUAGE;
+        return !isRunnableLanguage(language);
       },
     },
     {
@@ -240,6 +449,23 @@ export const codeArtifact = new Artifact<"code", Metadata>({
       onClick: ({ content }) => {
         navigator.clipboard.writeText(content);
         toast.success("Copied to clipboard!");
+      },
+    },
+    {
+      icon: <Download size={18} />,
+      description: "Download file",
+      onClick: ({ content, title }) => {
+        const blob = new Blob([content], {
+          type: "text/plain;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = title || "artifact.txt";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       },
     },
   ],

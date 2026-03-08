@@ -1,11 +1,13 @@
 import "server-only";
 
-import { createClient, type RedisClientType } from "redis";
+import { createClient } from "redis";
 import { env } from "@/lib/env";
 
-let redisClientPromise: Promise<RedisClientType | null> | null = null;
+type RedisClient = ReturnType<typeof createClient>;
 
-export async function getRedisClient(): Promise<RedisClientType | null> {
+let redisClientPromise: Promise<RedisClient | null> | null = null;
+
+export async function getRedisClient(): Promise<RedisClient | null> {
   if (!env.REDIS_URL) {
     return null;
   }

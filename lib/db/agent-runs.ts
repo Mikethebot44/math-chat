@@ -1,15 +1,4 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   AgentRunCompletedPayload,
   AgentRunErrorPayload,
@@ -17,21 +6,38 @@ import type {
   AgentRunStatus,
   CreateAgentRunInput,
 } from "@/lib/agent-runs/types";
+import { buildRunStatusPart } from "@/lib/agent-runs/run-status";
 import type { ChatMessage, ToolName } from "@/lib/ai/types";
-import { generateUUID } from "@/lib/utils";
+import {
+  mapDBPartsToUIParts,
+  mapUIMessagePartsToDBParts,
+} from "../utils/message-mapping";
 import { db } from "./client";
 import {
   agentRun,
   agentRunEvent,
   chat,
   message,
-  part,
   type Part,
+  part,
 } from "./schema";
-import { mapDBPartsToUIParts, mapUIMessagePartsToDBParts } from "../utils/message-mapping";
 
 function normalizeRequestedTools(requestedTools: ToolName[] | null) {
   return requestedTools && requestedTools.length > 0 ? requestedTools : null;
+}
+
+function buildCancelledRunStatusParts({
+  startedAt,
+}: {
+  startedAt: string;
+}): ChatMessage["parts"] {
+  return [
+    buildRunStatusPart({
+      label: "Cancelled",
+      phase: "queued",
+      startedAt,
+    }),
+  ];
 }
 
 export async function createAgentRun(input: CreateAgentRunInput) {
@@ -66,6 +72,38 @@ export async function createAgentRun(input: CreateAgentRunInput) {
       runId: createdRun.id,
     }),
   ]);
+
+  return createdRun;
+}
+
+export async function createCancelledAgentRun(input: CreateAgentRunInput) {
+  const now = new Date();
+  const [createdRun] = await db
+    .insert(agentRun)
+    .values({
+      assistantMessageId: input.assistantMessageId,
+      cancelRequestedAt: now,
+      chatId: input.chatId,
+      finishedAt: now,
+      requestedTools: normalizeRequestedTools(input.requestedTools),
+      selectedModel: input.selectedModel,
+      status: "cancelled",
+      userId: input.userId,
+      userMessageId: input.userMessageId,
+    })
+    .returning();
+
+  if (!createdRun) {
+    throw new Error("Failed to create cancelled agent run");
+  }
+
+  await appendAgentRunEvent({
+    kind: "run-cancelled",
+    payload: {
+      cancelledAt: now.toISOString(),
+    },
+    runId: createdRun.id,
+  });
 
   return createdRun;
 }
@@ -111,7 +149,7 @@ export async function appendAgentRunEvent({
   };
 }
 
-export async function listAgentRunEvents({
+export function listAgentRunEvents({
   runId,
   sinceSequence = 0,
 }: {
@@ -163,11 +201,30 @@ export async function getAgentRunForViewer({
   return row.run;
 }
 
-export async function getPendingAgentRunsByChat({
-  chatId,
+export async function getAgentRunForOwner({
+  runId,
+  userId,
 }: {
-  chatId: string;
+  runId: string;
+  userId: string;
 }) {
+  const [row] = await db
+    .select({
+      run: agentRun,
+      chatUserId: chat.userId,
+    })
+    .from(agentRun)
+    .innerJoin(chat, eq(chat.id, agentRun.chatId))
+    .where(eq(agentRun.id, runId));
+
+  if (!row || row.chatUserId !== userId) {
+    return null;
+  }
+
+  return row.run;
+}
+
+export function getPendingAgentRunsByChat({ chatId }: { chatId: string }) {
   return db
     .select()
     .from(agentRun)
@@ -199,11 +256,7 @@ export async function setAgentRunStatus({
   if (status === "starting" || status === "running") {
     values.startedAt = new Date();
   }
-  if (
-    status === "completed" ||
-    status === "failed" ||
-    status === "cancelled"
-  ) {
+  if (status === "completed" || status === "failed" || status === "cancelled") {
     values.finishedAt = new Date();
     values.leaseExpiresAt = null;
   }
@@ -217,14 +270,90 @@ export async function setAgentRunStatus({
   await db.update(agentRun).set(values).where(eq(agentRun.id, id));
 }
 
-export async function requestAgentRunCancellation({ runId }: { runId: string }) {
-  await db
-    .update(agentRun)
-    .set({
-      cancelRequestedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(agentRun.id, runId));
+export async function requestAgentRunCancellation({
+  runId,
+}: {
+  runId: string;
+}) {
+  const now = new Date();
+  const cancelledAt = now.toISOString();
+
+  const result = await db.transaction(async (tx) => {
+    const rows = await tx.execute(sql`
+      select "assistantMessageId", "cancelRequestedAt", "status"
+      from "AgentRun"
+      where "id" = ${runId}
+      for update;
+    `);
+
+    const row = rows[0] as
+      | {
+          assistantMessageId?: string;
+          cancelRequestedAt?: Date | null;
+          status?: AgentRunStatus;
+        }
+      | undefined;
+
+    if (!(row?.assistantMessageId && row.status)) {
+      return { finalizedQueuedRun: false };
+    }
+
+    if (
+      row.status === "completed" ||
+      row.status === "failed" ||
+      row.status === "cancelled"
+    ) {
+      return { finalizedQueuedRun: false };
+    }
+
+    if (row.status === "queued") {
+      await tx.delete(part).where(eq(part.messageId, row.assistantMessageId));
+      await tx.insert(part).values(
+        mapUIMessagePartsToDBParts(
+          buildCancelledRunStatusParts({
+            startedAt: row.cancelRequestedAt?.toISOString() ?? cancelledAt,
+          }),
+          row.assistantMessageId
+        )
+      );
+
+      await tx
+        .update(message)
+        .set({ activeRunId: null, activeStreamId: null })
+        .where(eq(message.id, row.assistantMessageId));
+
+      await tx
+        .update(agentRun)
+        .set({
+          cancelRequestedAt: row.cancelRequestedAt ?? now,
+          finishedAt: now,
+          leaseExpiresAt: null,
+          status: "cancelled",
+          updatedAt: now,
+        })
+        .where(eq(agentRun.id, runId));
+
+      return { finalizedQueuedRun: true };
+    }
+
+    await tx
+      .update(agentRun)
+      .set({
+        cancelRequestedAt: row.cancelRequestedAt ?? now,
+        updatedAt: now,
+      })
+      .where(eq(agentRun.id, runId));
+
+    return { finalizedQueuedRun: false };
+  });
+
+  if (result.finalizedQueuedRun) {
+    await appendAgentRunEvent({
+      kind: "run-cancelled",
+      payload: { cancelledAt },
+      runId,
+    });
+  }
 }
 
 export async function clearMessageActiveRunId({
@@ -251,7 +380,7 @@ export async function renewAgentRunLease({
     .where(eq(agentRun.id, runId));
 }
 
-export async function claimNextAgentRun({
+export function claimNextAgentRun({
   leaseExpiresAt,
 }: {
   leaseExpiresAt: Date;
@@ -354,7 +483,9 @@ export async function finalizeAgentRunSuccess({
 
   await appendAgentRunEvent({
     kind: "run-completed",
-    payload: { completedAt: new Date().toISOString() } satisfies AgentRunCompletedPayload,
+    payload: {
+      completedAt: new Date().toISOString(),
+    } satisfies AgentRunCompletedPayload,
     runId,
   });
 }
@@ -428,7 +559,8 @@ export async function getAssistantMessageForRun({
       activeStreamId: row.dbMessage.activeStreamId,
       createdAt: row.dbMessage.createdAt,
       parentMessageId: row.dbMessage.parentMessageId,
-      selectedModel: row.dbMessage.selectedModel as ChatMessage["metadata"]["selectedModel"],
+      selectedModel: row.dbMessage
+        .selectedModel as ChatMessage["metadata"]["selectedModel"],
       selectedTool: (row.dbMessage.selectedTool ||
         undefined) as ChatMessage["metadata"]["selectedTool"],
       usage: row.dbMessage.lastContext as ChatMessage["metadata"]["usage"],
@@ -447,6 +579,25 @@ export async function getLatestRunForMessage({
     .select()
     .from(agentRun)
     .where(eq(agentRun.assistantMessageId, assistantMessageId))
+    .orderBy(desc(agentRun.createdAt));
+
+  return run ?? null;
+}
+
+export async function getLatestPendingRunForUserMessage({
+  userMessageId,
+}: {
+  userMessageId: string;
+}) {
+  const [run] = await db
+    .select()
+    .from(agentRun)
+    .where(
+      and(
+        eq(agentRun.userMessageId, userMessageId),
+        inArray(agentRun.status, ["queued", "starting", "running"])
+      )
+    )
     .orderBy(desc(agentRun.createdAt));
 
   return run ?? null;

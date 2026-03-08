@@ -160,6 +160,7 @@ export function getLanguageFromFileName(fileName: string): string {
     fish: "shell",
 
     // Other languages
+    lean: "lean",
     sql: "sql",
     md: "markdown",
     mdx: "markdown",

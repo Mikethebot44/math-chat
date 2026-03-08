@@ -2,11 +2,12 @@
 
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
-import { EditorState, Transaction } from "@codemirror/state";
+import { EditorState, type Extension, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { memo, useEffect, useRef } from "react";
+import { leanEditorExtensions } from "@/lib/editor/lean-language";
 
 interface EditorProps {
   content: string;
@@ -18,7 +19,7 @@ interface EditorProps {
   status: "streaming" | "idle";
 }
 
-function getLanguageExtension(language: string) {
+function getLanguageExtension(language: string): Extension {
   switch (language) {
     case "typescript":
       return javascript({ jsx: false, typescript: true });
@@ -28,6 +29,8 @@ function getLanguageExtension(language: string) {
       return javascript({ jsx: true, typescript: false });
     case "tsx":
       return javascript({ jsx: true, typescript: true });
+    case "lean":
+      return leanEditorExtensions;
     default:
       return python();
   }

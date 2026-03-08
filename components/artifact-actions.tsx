@@ -47,6 +47,7 @@ function PureArtifactActions({
     metadata,
     setMetadata,
     isReadonly,
+    title: artifact.title,
   };
 
   function isActionDisabled(action: {
@@ -61,17 +62,32 @@ function PureArtifactActions({
     return false;
   }
 
+  function isActionHidden(action: {
+    isHidden?: (context: ArtifactActionContext) => boolean;
+  }): boolean {
+    if (action.isHidden) {
+      return action.isHidden(actionContext);
+    }
+    return false;
+  }
+
   return (
     <div className="flex flex-row gap-1">
       {artifactDefinition.actions
         .filter((action) => {
+          if (isActionHidden(action)) {
+            return false;
+          }
+
           // Hide editing actions when readonly, keep view/copy actions
           if (isReadonly) {
             return (
               action.description === "View changes" ||
               action.description === "View Previous version" ||
               action.description === "View Next version" ||
-              action.description === "Copy to clipboard"
+              action.description === "Copy to clipboard" ||
+              action.description === "Copy code to clipboard" ||
+              action.description === "Download file"
             );
           }
           return true;

@@ -1,7 +1,7 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChatActions, useChatStoreApi } from "@ai-sdk-tools/store";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { CameraIcon, FileIcon, ImageIcon, PlusIcon } from "lucide-react";
 import type React from "react";
 import {
@@ -25,6 +25,7 @@ import { ContextBar } from "@/components/context-bar";
 import { ContextUsageFromParent } from "@/components/context-usage";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
+import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   cancelAgentRun,
@@ -103,11 +104,10 @@ function PureMultimodalInput({
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const trpc = useTRPC();
-  const { data: runtimeConfig } = useQuery({
-    ...trpc.chat.getRuntimeConfig.queryOptions(),
-    enabled: !!session?.user,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  const {
+    backgroundChatEnabled: useBackgroundChat,
+    isRuntimeConfigResolved,
+  } = useBackgroundChatConfig();
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
@@ -136,8 +136,6 @@ function PureMultimodalInput({
   } = useChatInput();
 
   const isAnonymous = !session?.user;
-  const useBackgroundChat =
-    !!session?.user && runtimeConfig?.backgroundChatEnabled === true;
   const isModelDisallowedForAnonymous =
     isAnonymous &&
     !(ANONYMOUS_LIMITS.AVAILABLE_MODELS as readonly AppModelId[]).includes(
@@ -193,6 +191,12 @@ function PureMultimodalInput({
   const submission = useMemo(():
     | { enabled: false; message: string }
     | { enabled: true } => {
+    if (session?.user && !isRuntimeConfigResolved) {
+      return {
+        enabled: false,
+        message: "Loading chat configuration...",
+      };
+    }
     if (isModelDisallowedForAnonymous) {
       return { enabled: false, message: "Log in to use this model" };
     }
@@ -215,7 +219,14 @@ function PureMultimodalInput({
       };
     }
     return { enabled: true };
-  }, [isBusy, isEmpty, isModelDisallowedForAnonymous, uploadQueue.length]);
+  }, [
+    isBusy,
+    isEmpty,
+    isModelDisallowedForAnonymous,
+    isRuntimeConfigResolved,
+    session?.user,
+    uploadQueue.length,
+  ]);
 
   // Helper function to process and validate files
   const processFiles = useCallback(
@@ -645,13 +656,14 @@ function PureMultimodalInput({
           toast.error("Failed to cancel background run");
         });
       } else {
-        stopStreamMutation.mutate({ messageId: lastMessageId });
+        stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
       }
     } else if (session?.user && lastMessageId) {
-      stopStreamMutation.mutate({ messageId: lastMessageId });
+      stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
     }
     stopHelper?.();
   }, [
+    chatId,
     lastMessageId,
     session?.user,
     stopHelper,

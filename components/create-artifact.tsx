@@ -16,12 +16,14 @@ export interface ArtifactActionContext<M = any> {
   metadata: M;
   mode: "edit" | "diff";
   setMetadata: Dispatch<SetStateAction<M>>;
+  title: string;
 }
 
 interface ArtifactAction<M = any> {
   description: string;
   icon: ReactNode;
   isDisabled?: (context: ArtifactActionContext<M>) => boolean;
+  isHidden?: (context: ArtifactActionContext<M>) => boolean;
   label?: string;
   onClick: (context: ArtifactActionContext<M>) => Promise<void> | void;
 }

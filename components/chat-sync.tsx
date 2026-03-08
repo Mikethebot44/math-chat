@@ -2,12 +2,12 @@
 
 import { useChat, useChatActions } from "@ai-sdk-tools/store";
 import { DefaultChatTransport } from "ai";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useDataStream } from "@/components/data-stream-provider";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
+import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import { useCompleteDataPart } from "@/hooks/use-complete-data-part";
 import { applyRunEventToMessage } from "@/lib/agent-runs/message-events";
 import { parseRunStreamEvent } from "@/lib/agent-runs/client";
@@ -19,7 +19,6 @@ import {
   useThreadInitialMessages,
 } from "@/lib/stores/hooks-threads";
 import { fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
-import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
 
 function AnonymousChatSync({
@@ -206,7 +205,7 @@ function AuthenticatedBackgroundChatSync({ chatId }: { chatId: string }) {
         event.kind === "run-failed" ||
         event.kind === "run-cancelled"
       ) {
-        setStatus(event.kind === "run-completed" ? "ready" : "error");
+        setStatus(event.kind === "run-failed" ? "error" : "ready");
         void Promise.all([
           qc.invalidateQueries({
             queryKey: trpc.chat.getChatMessages.queryKey({ chatId }),
@@ -257,15 +256,15 @@ export function ChatSync({
   id: string;
   projectId?: string;
 }) {
-  const { data: session } = useSession();
-  const trpc = useTRPC();
-  const isAuthenticated = !!session?.user;
-  const { data: runtimeConfig } = useQuery({
-    ...trpc.chat.getRuntimeConfig.queryOptions(),
-    enabled: isAuthenticated,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  const backgroundChatEnabled = runtimeConfig?.backgroundChatEnabled === true;
+  const {
+    backgroundChatEnabled,
+    isAuthenticated,
+    isRuntimeConfigResolved,
+  } = useBackgroundChatConfig();
+
+  if (isAuthenticated && !isRuntimeConfigResolved) {
+    return null;
+  }
 
   if (isAuthenticated && backgroundChatEnabled) {
     return <AuthenticatedBackgroundChatSync chatId={id} />;

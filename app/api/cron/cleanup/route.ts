@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { unstable_rethrow } from "next/navigation";
 import { deleteFilesByUrls, listFiles } from "@/lib/blob";
 import { config } from "@/lib/config";
 import { getAllAttachmentUrls } from "@/lib/db/queries";
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
       results,
     });
   } catch (error) {
+    unstable_rethrow(error);
     console.error("Cleanup cron job failed:", error);
     return NextResponse.json(
       {

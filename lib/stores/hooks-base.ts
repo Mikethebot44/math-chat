@@ -117,7 +117,9 @@ export const useOriginUserCreatedAtByMessageId = (
 ): Date | null =>
   useBaseChatStore((state) => {
     const messages = state.getThrottledMessages();
-    return getOriginUserMessage(messages, messageId)?.metadata.createdAt ?? null;
+    return (
+      getOriginUserMessage(messages, messageId)?.metadata.createdAt ?? null
+    );
   }, shallow);
 
 function hasAristotleToolPart(message: ChatMessage | undefined): boolean {
@@ -218,7 +220,7 @@ function getLeanCodeFromAristotleOutput(output: {
   rawResponse?: { lean_code?: unknown } | unknown;
 }): string | null {
   if (typeof output.leanCode === "string" && output.leanCode.trim()) {
-    return output.leanCode.trim();
+    return stripProviderLeanHeader(output.leanCode);
   }
 
   if (
@@ -301,7 +303,7 @@ export const useAristotleThoughtDurationMs = (
 
 export const useAristotleLeanDownloadData = (
   messageId: string
-): { code: string; jobId: string | null } | null =>
+): { code: string; jobId: string | null; title: string } | null =>
   useBaseChatStore((state) => {
     const messages = state.getThrottledMessages();
     const sourceMessage = getAristotleSourceMessage(messages, messageId);
@@ -324,6 +326,7 @@ export const useAristotleLeanDownloadData = (
       return {
         code: leanCode,
         jobId: typeof output.jobId === "string" ? output.jobId : null,
+        title: `math-agent-${typeof output.jobId === "string" ? output.jobId : "proof"}.lean`,
       };
     }
 

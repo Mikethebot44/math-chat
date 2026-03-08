@@ -69,6 +69,7 @@ function PureArtifactPanel({
   const [document, setDocument] = useState<Document | null>(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const lastSavedContentRef = useRef<string>("");
+  const lastInitializedArtifactKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (documents && documents.length > 0) {
@@ -97,6 +98,9 @@ function PureArtifactPanel({
           }));
         }
       }
+    } else {
+      setDocument(null);
+      setCurrentVersionIndex(-1);
     }
   }, [documents, setArtifact, artifact.messageId]);
 
@@ -160,6 +164,12 @@ function PureArtifactPanel({
       if (isReadonly) {
         return;
       }
+
+      setArtifact((currentArtifact) => ({
+        ...currentArtifact,
+        content: updatedContent,
+      }));
+
       // Update the last saved content reference
       lastSavedContentRef.current = updatedContent;
 
@@ -173,7 +183,13 @@ function PureArtifactPanel({
         }
       }
     },
-    [document, debouncedHandleContentChange, handleContentChange, isReadonly]
+    [
+      document,
+      debouncedHandleContentChange,
+      handleContentChange,
+      isReadonly,
+      setArtifact,
+    ]
   );
 
   function getDocumentContentById(index: number) {
@@ -223,23 +239,29 @@ function PureArtifactPanel({
     documents && documents.length > 0
       ? currentVersionIndex === documents.length - 1
       : true;
+  const artifactInitializationKey = `${artifact.kind}:${artifact.documentId}:${artifact.messageId}`;
 
   useEffect(() => {
-    if (
-      artifact.documentId !== "init" &&
-      artifact.status !== "streaming" &&
-      artifactDefinition.initialize
-    ) {
-      artifactDefinition.initialize({
-        documentId: artifact.documentId,
-        setMetadata,
-        trpc,
-        queryClient,
-        isAuthenticated,
-      });
+    if (artifact.status === "streaming" || !artifactDefinition.initialize) {
+      return;
     }
+
+    if (lastInitializedArtifactKeyRef.current === artifactInitializationKey) {
+      return;
+    }
+
+    lastInitializedArtifactKeyRef.current = artifactInitializationKey;
+
+    artifactDefinition.initialize({
+      documentId: artifact.documentId,
+      setMetadata,
+      trpc,
+      queryClient,
+      isAuthenticated,
+    });
   }, [
     artifact.documentId,
+    artifactInitializationKey,
     artifactDefinition,
     setMetadata,
     trpc,

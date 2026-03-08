@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 import { createModuleLogger } from "@/lib/logger";
-import { stripLeanCodeFences } from "./normalize-lean-source";
+import { stripProviderLeanHeader } from "./normalize-lean-source";
 
 const log = createModuleLogger("lean-proof:aristotle");
 
@@ -121,7 +121,7 @@ function normalizeLeanCode(leanCode: string | null): string {
     return "";
   }
 
-  return stripLeanCodeFences(leanCode).trim();
+  return stripProviderLeanHeader(leanCode);
 }
 
 function normalizeStatus(status?: string | null): string {

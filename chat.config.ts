@@ -8,7 +8,7 @@ import type { ConfigInput } from "@/lib/config-schema";
  */
 const config: ConfigInput = {
   appPrefix: "chat",
-  appName: "Chat",
+  appName: "Scout",
   appDescription: "AI chat powered by ChatJS",
   appUrl: "http://localhost:3000",
   organization: {

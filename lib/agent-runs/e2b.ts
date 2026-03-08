@@ -117,6 +117,7 @@ export async function runAgentRunInSandbox({ runId }: { runId: string }) {
       latestRun.status !== "cancelled" &&
       latestRun.status !== "completed"
     ) {
+      const cancelled = Boolean(latestRun.cancelRequestedAt);
       await finalizeAgentRunFailure({
         assistantMessageId: latestRun.assistantMessageId,
         error: {
@@ -125,12 +126,18 @@ export async function runAgentRunInSandbox({ runId }: { runId: string }) {
             stderr: command.stderr,
             stdout: command.stdout,
           },
-          message: command.error || "Sandbox command failed",
+          message: cancelled
+            ? "Background run cancelled"
+            : command.error || "Sandbox command failed",
           retryable: false,
         },
         runId,
-        status: "failed",
+        status: cancelled ? "cancelled" : "failed",
       });
+
+      if (cancelled) {
+        return;
+      }
     }
   } catch (error) {
     const latestRun = await getAgentRunById({ id: runId });
@@ -140,16 +147,24 @@ export async function runAgentRunInSandbox({ runId }: { runId: string }) {
       latestRun.status !== "cancelled" &&
       latestRun.status !== "completed"
     ) {
+      const cancelled = Boolean(latestRun.cancelRequestedAt);
       await finalizeAgentRunFailure({
         assistantMessageId: latestRun.assistantMessageId,
         error: {
-          message:
-            error instanceof Error ? error.message : "Sandbox execution failed",
+          message: cancelled
+            ? "Background run cancelled"
+            : error instanceof Error
+              ? error.message
+              : "Sandbox execution failed",
           retryable: false,
         },
         runId,
-        status: "failed",
+        status: cancelled ? "cancelled" : "failed",
       });
+
+      if (cancelled) {
+        return;
+      }
     }
     throw error;
   } finally {

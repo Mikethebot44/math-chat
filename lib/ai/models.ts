@@ -1,4 +1,3 @@
-import { config } from "@/lib/config";
 import { createModuleLogger } from "@/lib/logger";
 import { getActiveGateway } from "./active-gateway";
 import type { AiGatewayModel } from "./ai-gateway-models-schemas";
@@ -8,12 +7,7 @@ import { toModelData } from "./to-model-data";
 const log = createModuleLogger("ai/models");
 const MODEL_CACHE_TTL_MS = 60 * 60 * 1000;
 
-let modelsCache:
-  | {
-      expiresAt: number;
-      value: Promise<ModelData[]>;
-    }
-  | null = null;
+let modelsCache: Promise<ModelData[]> | null = null;
 
 async function fetchModelsRaw(): Promise<AiGatewayModel[]> {
   const activeGateway = getActiveGateway();
@@ -36,23 +30,25 @@ async function fetchModelsRaw(): Promise<AiGatewayModel[]> {
   }
 }
 
-export async function fetchModels(): Promise<ModelData[]> {
-  const now = Date.now();
-  if (modelsCache && modelsCache.expiresAt > now) {
-    return modelsCache.value;
+export function fetchModels(): Promise<ModelData[]> {
+  if (modelsCache) {
+    return modelsCache;
   }
 
+  let timeoutId: ReturnType<typeof setTimeout>;
   const value = fetchModelsRaw()
     .then((models) => models.map(toModelData))
     .catch((error) => {
+      clearTimeout(timeoutId);
       modelsCache = null;
       throw error;
     });
+  timeoutId = setTimeout(() => {
+    modelsCache = null;
+  }, MODEL_CACHE_TTL_MS);
+  timeoutId.unref?.();
 
-  modelsCache = {
-    expiresAt: now + MODEL_CACHE_TTL_MS,
-    value,
-  };
+  modelsCache = value;
 
   return value;
 }

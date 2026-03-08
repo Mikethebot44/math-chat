@@ -8,6 +8,7 @@ import {
 } from "@/lib/stores/hooks-base";
 import { useMessagePartTypesById } from "@/lib/stores/hooks-message-parts";
 import { Message, MessageContent } from "./ai-elements/message";
+import { AristotleLeanArtifactSync } from "./aristotle-lean-artifact-sync";
 import { FollowUpSuggestionsParts } from "./followup-suggestions";
 import { MessageActions } from "./message-actions";
 import { MessageParts } from "./message-parts";
@@ -52,6 +53,7 @@ const PureAssistantMessage = ({
           isReadonly={isReadonly}
           messageId={messageId}
         />
+        <AristotleLeanArtifactSync messageId={messageId} />
 
         <SourcesAnnotations
           key={`sources-annotations-${messageId}`}

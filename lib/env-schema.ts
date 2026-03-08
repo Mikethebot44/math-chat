@@ -92,7 +92,9 @@ export const serverEnvSchema = {
     .int()
     .positive()
     .optional()
-    .describe("Lease duration in milliseconds for claimed background chat runs"),
+    .describe(
+      "Lease duration in milliseconds for claimed background chat runs"
+    ),
   AGENT_RUN_SANDBOX_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -189,4 +191,8 @@ export const clientEnvSchema = {
     .enum(["true", "false"])
     .optional()
     .describe("Enable authenticated background chat execution in the browser"),
+  NEXT_PUBLIC_LEAN_RUN_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .describe("Enable the Lean canvas Run button in the browser"),
 };

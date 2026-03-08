@@ -1,6 +1,7 @@
 import { CommandExitError, type CommandResult, Sandbox } from "e2b";
 import { env } from "@/lib/env";
 import { createModuleLogger } from "@/lib/logger";
+import { DEFAULT_LEAN_FILE_NAME, sanitizeLeanFileName } from "./lean-file-name";
 import {
   containsLeanHoles,
   ensureMathlibImport,
@@ -10,7 +11,6 @@ const log = createModuleLogger("lean-proof:sandbox");
 
 const DEFAULT_SANDBOX_TIMEOUT_MS = 180_000;
 const DEFAULT_WORKSPACE_DIR = "/home/user/lean_workspace";
-const DEFAULT_FILE_NAME = "Proof.lean";
 const E2B_TIMEOUT_RE = /deadline_exceeded|timed out/i;
 
 export interface LeanVerificationResult {
@@ -58,16 +58,19 @@ export async function closeLeanSandbox(sandbox: Sandbox): Promise<void> {
 export async function verifyLeanSource({
   sandbox,
   source,
-  fileName = DEFAULT_FILE_NAME,
+  fileName = DEFAULT_LEAN_FILE_NAME,
+  ensureMathlib = true,
 }: {
   sandbox: Sandbox;
   source: string;
   fileName?: string;
+  ensureMathlib?: boolean;
 }): Promise<LeanVerificationResult> {
   const workspaceDir = getLeanWorkspaceDir();
-  const normalizedSource = ensureMathlibImport(source);
-  const filePath = `${workspaceDir}/${fileName}`;
-  const command = `cd ${workspaceDir} && lake env lean ${fileName}`;
+  const normalizedSource = ensureMathlib ? ensureMathlibImport(source) : source;
+  const sanitizedFileName = sanitizeLeanFileName(fileName);
+  const filePath = `${workspaceDir}/${sanitizedFileName}`;
+  const command = `cd ${workspaceDir} && lake env lean ${sanitizedFileName}`;
 
   await sandbox.files.write(filePath, normalizedSource);
 

@@ -1,7 +1,8 @@
 import { useMessageById } from "@ai-sdk-tools/store";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, ThumbsDown, ThumbsUp } from "lucide-react";
+import { File, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
+import { useArtifact } from "@/hooks/use-artifact";
 import type { ChatMessage } from "@/lib/ai/types";
 import type { Vote } from "@/lib/db/schema";
 import {
@@ -58,57 +59,61 @@ export function FeedbackActions({
     })
   );
 
-  if (isReadOnly || !isAuthenticated) {
+  if (isReadOnly) {
     return null;
   }
 
   return (
     <>
-      <Action
-        className="pointer-events-auto! h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        data-testid="message-downvote"
-        disabled={vote && !vote.isUpvoted}
-        onClick={() => {
-          toast.promise(
-            voteMessageMutation.mutateAsync({
-              chatId,
-              messageId,
-              type: "down" as const,
-            }),
-            {
-              loading: "Downvoting Response...",
-              success: "Downvoted Response!",
-              error: "Failed to downvote response.",
-            }
-          );
-        }}
-        tooltip="Downvote Response"
-      >
-        <ThumbsDown size={14} />
-      </Action>
+      {isAuthenticated ? (
+        <>
+          <Action
+            className="pointer-events-auto! h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            data-testid="message-downvote"
+            disabled={vote && !vote.isUpvoted}
+            onClick={() => {
+              toast.promise(
+                voteMessageMutation.mutateAsync({
+                  chatId,
+                  messageId,
+                  type: "down" as const,
+                }),
+                {
+                  loading: "Downvoting Response...",
+                  success: "Downvoted Response!",
+                  error: "Failed to downvote response.",
+                }
+              );
+            }}
+            tooltip="Downvote Response"
+          >
+            <ThumbsDown size={14} />
+          </Action>
 
-      <Action
-        className="pointer-events-auto! h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        data-testid="message-upvote"
-        disabled={vote?.isUpvoted}
-        onClick={() => {
-          toast.promise(
-            voteMessageMutation.mutateAsync({
-              chatId,
-              messageId,
-              type: "up" as const,
-            }),
-            {
-              loading: "Upvoting Response...",
-              success: "Upvoted Response!",
-              error: "Failed to upvote response.",
-            }
-          );
-        }}
-        tooltip="Upvote Response"
-      >
-        <ThumbsUp size={14} />
-      </Action>
+          <Action
+            className="pointer-events-auto! h-7 w-7 p-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            data-testid="message-upvote"
+            disabled={vote?.isUpvoted}
+            onClick={() => {
+              toast.promise(
+                voteMessageMutation.mutateAsync({
+                  chatId,
+                  messageId,
+                  type: "up" as const,
+                }),
+                {
+                  loading: "Upvoting Response...",
+                  success: "Upvoted Response!",
+                  error: "Failed to upvote response.",
+                }
+              );
+            }}
+            tooltip="Upvote Response"
+          >
+            <ThumbsUp size={14} />
+          </Action>
+        </>
+      ) : null}
 
       <RetryButton messageId={messageId} />
       <SelectedModelId messageId={messageId} />
@@ -120,6 +125,7 @@ function SelectedModelId({ messageId }: { messageId: string }) {
   const message = useMessageById<ChatMessage>(messageId);
   const leanDownloadData = useAristotleLeanDownloadData(messageId);
   const thoughtDurationMs = useAristotleThoughtDurationMs(messageId);
+  const { setArtifact } = useArtifact();
 
   if (typeof thoughtDurationMs === "number") {
     return (
@@ -130,30 +136,25 @@ function SelectedModelId({ messageId }: { messageId: string }) {
         {leanDownloadData ? (
           <Action
             className="h-7 gap-1.5 px-2 font-medium text-muted-foreground text-xs hover:bg-accent hover:text-accent-foreground"
-            label="Download Lean"
+            label="Open Lean"
             onClick={() => {
-              try {
-                const blob = new Blob([leanDownloadData.code], {
-                  type: "text/plain;charset=utf-8",
-                });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `math-agent-${leanDownloadData.jobId ?? "proof"}.lean`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-              } catch {
-                toast.error("Failed to download Lean statement");
-              }
+              setArtifact({
+                content: leanDownloadData.code,
+                date: new Date().toISOString(),
+                documentId: "init",
+                isVisible: true,
+                kind: "code",
+                messageId,
+                status: "idle",
+                title: leanDownloadData.title,
+              });
             }}
             size="sm"
-            tooltip="Download Lean statement"
+            tooltip="Open Lean file"
             variant="ghost"
           >
-            <Download size={14} />
-            Download Lean
+            <File size={14} />
+            Open Lean
           </Action>
         ) : null}
       </div>

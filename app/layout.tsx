@@ -7,13 +7,35 @@ import Script from "next/script";
 import "./globals.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
+import iconDark from "@/app/icon-dark.png";
+import iconLight from "@/app/icon-light.png";
 import { ThemeProvider } from "@/components/theme-provider";
 import { config } from "@/lib/config";
+
+const themedIcons = [
+  {
+    url: iconLight.src,
+    media: "(prefers-color-scheme: light)",
+    sizes: "500x500",
+    type: "image/png",
+  },
+  {
+    url: iconDark.src,
+    media: "(prefers-color-scheme: dark)",
+    sizes: "500x500",
+    type: "image/png",
+  },
+];
 
 export const metadata: Metadata = {
   metadataBase: new URL(config.appUrl),
   title: config.appTitle ?? config.appName,
   description: config.appDescription,
+  icons: {
+    icon: themedIcons,
+    shortcut: themedIcons,
+    apple: "/apple-icon.png",
+  },
   openGraph: {
     siteName: config.appName,
     url: config.appUrl,
@@ -41,7 +63,9 @@ const geistMono = Geist_Mono({
 
 const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
 const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
-const THEME_COLOR_SCRIPT = `\
+const LIGHT_FAVICON = iconLight.src;
+const DARK_FAVICON = iconDark.src;
+const THEME_HEAD_SCRIPT = `\
 (function() {
   var html = document.documentElement;
   var meta = document.querySelector('meta[name="theme-color"]');
@@ -50,13 +74,32 @@ const THEME_COLOR_SCRIPT = `\
     meta.setAttribute('name', 'theme-color');
     document.head.appendChild(meta);
   }
-  function updateThemeColor() {
+  function ensureIconLink(id, rel) {
+    var link = document.getElementById(id);
+    if (!link) {
+      link = document.createElement('link');
+      link.setAttribute('id', id);
+      link.setAttribute('rel', rel);
+      document.head.appendChild(link);
+    }
+    return link;
+  }
+  var icon = ensureIconLink('theme-favicon', 'icon');
+  var shortcut = ensureIconLink('theme-shortcut-favicon', 'shortcut icon');
+  function updateThemeHead() {
     var isDark = html.classList.contains('dark');
     meta.setAttribute('content', isDark ? '${DARK_THEME_COLOR}' : '${LIGHT_THEME_COLOR}');
+    var href = isDark ? '${DARK_FAVICON}' : '${LIGHT_FAVICON}';
+    icon.setAttribute('href', href);
+    icon.setAttribute('sizes', '500x500');
+    icon.setAttribute('type', 'image/png');
+    shortcut.setAttribute('href', href);
+    shortcut.setAttribute('sizes', '500x500');
+    shortcut.setAttribute('type', 'image/png');
   }
-  var observer = new MutationObserver(updateThemeColor);
+  var observer = new MutationObserver(updateThemeHead);
   observer.observe(html, { attributes: true, attributeFilter: ['class'] });
-  updateThemeColor();
+  updateThemeHead();
 })();`;
 
 export default async function RootLayout({
@@ -75,8 +118,8 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <Script id="theme-color-script" strategy="beforeInteractive">
-          {THEME_COLOR_SCRIPT}
+        <Script id="theme-head-script" strategy="beforeInteractive">
+          {THEME_HEAD_SCRIPT}
         </Script>
         {process.env.NODE_ENV !== "production" ? (
           <Script
