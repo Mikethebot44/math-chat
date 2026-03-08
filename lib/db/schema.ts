@@ -117,11 +117,83 @@ export const message = pgTable("Message", {
   selectedTool: varchar("selectedTool", { length: 256 }).default(""),
   lastContext: json("lastContext"),
   activeStreamId: varchar("activeStreamId", { length: 64 }),
+  activeRunId: uuid("activeRunId"),
   /** Timestamp when this message's stream was canceled by the user. Null means not canceled. */
   canceledAt: timestamp("canceledAt"),
 });
 
 export type DBMessage = InferSelectModel<typeof message>;
+
+export const agentRun = pgTable(
+  "AgentRun",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    chatId: uuid("chatId")
+      .notNull()
+      .references(() => chat.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    userMessageId: uuid("userMessageId")
+      .notNull()
+      .references(() => message.id, { onDelete: "cascade" }),
+    assistantMessageId: uuid("assistantMessageId")
+      .notNull()
+      .references(() => message.id, { onDelete: "cascade" }),
+    selectedModel: varchar("selectedModel", { length: 256 }).notNull(),
+    requestedTools: json("requestedTools"),
+    status: varchar("status", { length: 32 }).notNull().default("queued"),
+    attempt: integer("attempt").notNull().default(0),
+    maxAttempts: integer("maxAttempts").notNull().default(2),
+    priority: integer("priority").notNull().default(0),
+    sandboxId: varchar("sandboxId", { length: 128 }),
+    leaseExpiresAt: timestamp("leaseExpiresAt"),
+    startedAt: timestamp("startedAt"),
+    finishedAt: timestamp("finishedAt"),
+    cancelRequestedAt: timestamp("cancelRequestedAt"),
+    lastError: json("lastError"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    AgentRun_chat_id_idx: index("AgentRun_chat_id_idx").on(t.chatId),
+    AgentRun_user_id_idx: index("AgentRun_user_id_idx").on(t.userId),
+    AgentRun_status_priority_created_idx: index(
+      "AgentRun_status_priority_created_idx"
+    ).on(t.status, t.priority, t.createdAt),
+    AgentRun_assistant_message_id_idx: uniqueIndex(
+      "AgentRun_assistant_message_id_idx"
+    ).on(t.assistantMessageId),
+  })
+);
+
+export type AgentRun = InferSelectModel<typeof agentRun>;
+
+export const agentRunEvent = pgTable(
+  "AgentRunEvent",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    runId: uuid("runId")
+      .notNull()
+      .references(() => agentRun.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    kind: varchar("kind", { length: 64 }).notNull(),
+    payload: json("payload").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    AgentRunEvent_run_id_sequence_idx: uniqueIndex(
+      "AgentRunEvent_run_id_sequence_idx"
+    ).on(t.runId, t.sequence),
+    AgentRunEvent_run_id_created_idx: index("AgentRunEvent_run_id_created_idx")
+      .on(t.runId, t.createdAt),
+  })
+);
+
+export type AgentRunEvent = InferSelectModel<typeof agentRunEvent>;
 
 /**
  * Prefix-based Part Storage

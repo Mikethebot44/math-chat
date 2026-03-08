@@ -22,7 +22,6 @@ import { DynamicToolPart } from "./part/dynamic-tool";
 import { GenerateImage } from "./part/generate-image";
 import { GenerateVideo } from "./part/generate-video";
 import { LeanProof } from "./part/lean-proof";
-import { ReasoningPart } from "./part/message-reasoning";
 import { ReadDocument } from "./part/read-document";
 
 import { RetrieveUrl } from "./part/retrieve-url";
@@ -121,7 +120,7 @@ function PureMessagePart({
   }
 
   if (isReasoningUIPart(part)) {
-    return <ReasoningPart content={part.text} isLoading={isLoading} />;
+    return null;
   }
 
   if (isDataUIPart(part)) {

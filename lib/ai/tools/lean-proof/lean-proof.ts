@@ -7,15 +7,12 @@ import {
 } from "./aristotle-client";
 
 const statusToolInputSchema = z.object({
-  jobId: z
-    .string()
-    .min(1)
-    .describe("Aristotle job_id returned by the submission tool."),
+  jobId: z.string().min(1).describe("Job ID returned by the submission tool."),
   waitForCompletion: z
     .boolean()
     .default(true)
     .describe(
-      "When true, poll Aristotle until the job completes, fails, or maxWaitMs is reached."
+      "When true, poll the job until it completes, fails, or maxWaitMs is reached."
     ),
   maxWaitMs: z
     .number()
@@ -30,12 +27,12 @@ const statusToolInputSchema = z.object({
     .min(1000)
     .max(30_000)
     .default(5000)
-    .describe("Delay between Aristotle status checks while polling."),
+    .describe("Delay between status checks while polling."),
 });
 
 export const leanProof = () =>
   tool({
-    description: `Submit a natural-language math problem to Aristotle.
+    description: `Submit a natural-language math problem to the math agent.
 
 Use this first for formalization or proof-generation requests.
 - Input must be natural language only
@@ -50,7 +47,7 @@ Use this first for formalization or proof-generation requests.
       mode: z
         .enum([DEFAULT_ARISTOTLE_MODE])
         .default(DEFAULT_ARISTOTLE_MODE)
-        .describe("Aristotle solve mode. Keep this at formalize_and_prove."),
+        .describe("Solve mode. Keep this at formalize_and_prove."),
     }),
     execute: async ({
       prompt,
@@ -67,7 +64,7 @@ Use this first for formalization or proof-generation requests.
 
 export const aristotleCheckJob = () =>
   tool({
-    description: `Check the status of an Aristotle proof job.
+    description: `Check the status of a math agent proof job.
 
 Use this after leanProof returns a jobId.
 - Set waitForCompletion to true when you want to keep polling for final Lean code

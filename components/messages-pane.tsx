@@ -12,6 +12,7 @@ interface MessagesPaneProps {
   chatId: string;
   className?: string;
   isReadonly: boolean;
+  projectId?: string;
   status: UseChatHelpers<ChatMessage>["status"];
 }
 
@@ -20,6 +21,7 @@ function PureMessagesPane({
   status,
   isReadonly,
   className,
+  projectId,
 }: MessagesPaneProps) {
   const parentMessageId = useLastMessageId();
 
@@ -37,6 +39,7 @@ function PureMessagesPane({
             <MultimodalInput
               chatId={chatId}
               parentMessageId={parentMessageId}
+              projectId={projectId}
               status={status}
             />
           </div>

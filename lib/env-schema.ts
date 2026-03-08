@@ -65,6 +65,10 @@ export const serverEnvSchema = {
     .describe("API key for OpenAI-compatible provider"),
   OPENAI_API_KEY: z.string().optional().describe("OpenAI API key"),
   E2B_API_KEY: z.string().optional().describe("E2B API key"),
+  E2B_CHAT_TEMPLATE_ID: z
+    .string()
+    .optional()
+    .describe("E2B template name or ID for the background chat sandbox"),
   E2B_LEAN_TEMPLATE_ID: z
     .string()
     .optional()
@@ -79,6 +83,22 @@ export const serverEnvSchema = {
     .positive()
     .optional()
     .describe("Timeout in milliseconds for Lean sandbox execution"),
+  BACKGROUND_CHAT_E2B: z
+    .enum(["true", "false"])
+    .optional()
+    .describe("Enable authenticated background chat execution via E2B"),
+  AGENT_RUN_LEASE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Lease duration in milliseconds for claimed background chat runs"),
+  AGENT_RUN_SANDBOX_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Timeout in milliseconds for an E2B background chat sandbox"),
   ARISTOTLE_API_URL: z
     .string()
     .url()
@@ -162,4 +182,11 @@ export const serverEnvSchema = {
 
   // Vercel platform (auto-set by Vercel)
   VERCEL_URL: z.string().optional().describe("Auto-set by Vercel platform"),
+};
+
+export const clientEnvSchema = {
+  NEXT_PUBLIC_BACKGROUND_CHAT_E2B: z
+    .enum(["true", "false"])
+    .optional()
+    .describe("Enable authenticated background chat execution in the browser"),
 };

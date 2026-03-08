@@ -37,6 +37,7 @@ import { config } from "@/lib/config";
 import { createAnonymousSession } from "@/lib/create-anonymous-session";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
 import { canSpend, deductCredits } from "@/lib/db/credits";
+import { createAgentRun } from "@/lib/db/agent-runs";
 import { getMcpConnectorsByUserId } from "@/lib/db/mcp-queries";
 import {
   getChatById,
@@ -53,11 +54,13 @@ import type { McpConnector } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { MAX_INPUT_TOKENS } from "@/lib/limits/tokens";
 import { createModuleLogger } from "@/lib/logger";
+import { isBackgroundChatEnabled } from "@/lib/agent-runs/config";
 import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import type { AnonymousSession } from "@/lib/types/anonymous";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { generateUUID } from "@/lib/utils";
 import { checkAnonymousRateLimit, getClientIP } from "@/lib/utils/rate-limit";
+import { buildRunStatusPart } from "@/lib/agent-runs/run-status";
 import { generateTitleFromUserMessage } from "../../actions";
 import { getThreadUpToMessageId } from "./get-thread-up-to-message-id";
 
@@ -840,6 +843,60 @@ export async function POST(request: NextRequest) {
 
     const explicitlyRequestedTools =
       determineExplicitlyRequestedTools(selectedTool);
+
+    if (userId && isBackgroundChatEnabled()) {
+      const assistantMessageId = generateUUID();
+      const placeholderAssistantMessage: ChatMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        parts: [
+          buildRunStatusPart({
+            label: "Queued...",
+            phase: "queued",
+            startedAt: new Date().toISOString(),
+          }),
+        ],
+        metadata: {
+          activeRunId: null,
+          activeStreamId: null,
+          createdAt: new Date(),
+          parentMessageId: normalizedUserMessage.id,
+          selectedModel: selectedModelId,
+          selectedTool: selectedTool ?? undefined,
+        },
+      };
+
+      await saveMessage({
+        id: assistantMessageId,
+        chatId,
+        message: placeholderAssistantMessage,
+      });
+
+      const run = await createAgentRun({
+        assistantMessageId,
+        chatId,
+        requestedTools: explicitlyRequestedTools,
+        selectedModel: selectedModelId,
+        userId,
+        userMessageId: normalizedUserMessage.id,
+      });
+
+      return Response.json(
+        {
+          assistantMessage: {
+            ...placeholderAssistantMessage,
+            metadata: {
+              ...placeholderAssistantMessage.metadata,
+              activeRunId: run.id,
+            },
+          },
+          assistantMessageId,
+          chatId,
+          runId: run.id,
+        },
+        { status: 202 }
+      );
+    }
 
     const [contextResult, mcpConnectors] = await Promise.all([
       prepareRequestContext({

@@ -1,39 +1,27 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ShimmerText } from "@/components/shimmer-text";
+import { LoadingStatus } from "@/components/loading-status";
+import {
+  ARISTOTLE_LOADING_LINE_ROTATION_MS,
+  buildFallbackAristotleLoadingLines,
+  getAristotlePromptForStatus,
+  shuffleAristotleLoadingLines,
+} from "@/lib/ai/tools/lean-proof/aristotle-loading-lines";
 import type { ChatMessage } from "@/lib/ai/types";
 import {
   useLatestAssistantChildCreatedAtByParentId,
   useMessageMetadataById,
+  useMessages,
+  useOriginUserCreatedAtByMessageId,
 } from "@/lib/stores/hooks-base";
+import { useChatId } from "@/providers/chat-id-provider";
 
 type AristotleToolPart = Extract<
   ChatMessage["parts"][number],
   { type: "tool-leanProof" | "tool-aristotleCheckJob" }
 >;
-
-interface AristotleTimingOutput {
-  completed?: boolean;
-  completedAt?: string;
-  failed?: boolean;
-  startedAt?: string;
-  thoughtDurationMs?: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getTimingOutput(
-  tool: AristotleToolPart
-): AristotleTimingOutput | null {
-  if (tool.state !== "output-available" || !isRecord(tool.output)) {
-    return null;
-  }
-
-  return tool.output as AristotleTimingOutput;
-}
 
 function toTimestamp(value: Date | string | null | undefined): number | null {
   if (!value) {
@@ -45,23 +33,6 @@ function toTimestamp(value: Date | string | null | undefined): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
-
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-
-  return `${seconds}s`;
-}
-
 export function AristotleThinkingStatus({
   messageId,
   tool,
@@ -69,87 +40,118 @@ export function AristotleThinkingStatus({
   messageId: string;
   tool: AristotleToolPart;
 }) {
+  const { id: chatId } = useChatId();
+  const messages = useMessages() as ChatMessage[];
   const metadata = useMessageMetadataById(messageId);
+  const originUserCreatedAt = useOriginUserCreatedAtByMessageId(messageId);
   const continuationCreatedAt =
     useLatestAssistantChildCreatedAtByParentId(messageId);
-  const output = getTimingOutput(tool);
-  const startedAtMs =
-    toTimestamp(output?.startedAt) ??
-    toTimestamp(metadata.createdAt) ??
-    Date.now();
   const continuationCreatedAtMs = toTimestamp(continuationCreatedAt);
-  const completedAtMs = toTimestamp(output?.completedAt);
-  const persistedDurationMs = output?.thoughtDurationMs;
-  const hasResolvedTimestamp =
-    completedAtMs !== null || continuationCreatedAtMs !== null;
-  const isResolved =
-    tool.state === "output-error" ||
-    Boolean(output?.completed) ||
-    Boolean(output?.failed) ||
-    hasResolvedTimestamp;
-  const resolvedAtMs = useMemo(() => {
-    if (typeof persistedDurationMs === "number") {
-      return startedAtMs + persistedDurationMs;
-    }
-
-    return completedAtMs ?? continuationCreatedAtMs;
-  }, [
-    completedAtMs,
-    continuationCreatedAtMs,
-    persistedDurationMs,
-    startedAtMs,
-  ]);
-
-  const [now, setNow] = useState(() => Date.now());
-  const [frozenResolvedAtMs, setFrozenResolvedAtMs] = useState<number | null>(
-    () => resolvedAtMs ?? null
+  const isHardError = tool.state === "output-error";
+  const isCompleted = continuationCreatedAtMs !== null;
+  const [lineIndex, setLineIndex] = useState(0);
+  const prompt = useMemo(
+    () =>
+      getAristotlePromptForStatus({
+        messageId,
+        messages,
+        tool,
+      }),
+    [messageId, messages, tool]
   );
+  const shouldGenerateLines =
+    Boolean(prompt) && !isHardError && !isCompleted;
 
-  useEffect(() => {
-    if (!isResolved) {
-      setFrozenResolvedAtMs(null);
-      return;
+  const { data: generatedLines, isFetching: isGeneratingLines } = useQuery({
+    queryKey: ["aristotle-loading-lines", chatId, messageId, prompt],
+    enabled: shouldGenerateLines,
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/chat/${chatId}/aristotle-loading-lines`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messageId,
+            prompt: prompt ?? "",
+          }),
+        }
+      );
+
+      const payload = (await response.json()) as {
+        lines?: unknown;
+        source?: unknown;
+      };
+
+      if (
+        !(
+          response.ok &&
+          Array.isArray(payload.lines) &&
+          payload.lines.every((line) => typeof line === "string")
+        )
+      ) {
+        throw new Error("Failed to load Aristotle status lines");
+      }
+
+      if (
+        process.env.NODE_ENV === "development" &&
+        payload.source === "fallback"
+      ) {
+        console.warn("Using fallback Aristotle loading lines", {
+          chatId,
+          messageId,
+        });
+      }
+
+      return payload.lines;
+    },
+    retry: 1,
+  });
+
+  const rotatingLines = useMemo(() => {
+    if (generatedLines?.length) {
+      return shuffleAristotleLoadingLines(generatedLines);
     }
 
-    setFrozenResolvedAtMs((current) => current ?? resolvedAtMs ?? Date.now());
-  }, [isResolved, resolvedAtMs]);
+    if (prompt && !isGeneratingLines) {
+      return shuffleAristotleLoadingLines(
+        buildFallbackAristotleLoadingLines(prompt)
+      );
+    }
+
+    return [];
+  }, [generatedLines, isGeneratingLines, prompt]);
 
   useEffect(() => {
-    if (frozenResolvedAtMs !== null) {
+    if (rotatingLines.length <= 1 || isHardError || isCompleted) {
       return;
     }
 
     const intervalId = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
+      setLineIndex((current) => (current + 1) % rotatingLines.length);
+    }, ARISTOTLE_LOADING_LINE_ROTATION_MS);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [frozenResolvedAtMs]);
+  }, [isCompleted, isHardError, rotatingLines]);
 
-  const elapsedMs = Math.max(0, (frozenResolvedAtMs ?? now) - startedAtMs);
-  const elapsedText = formatElapsed(elapsedMs);
-
-  if (frozenResolvedAtMs !== null) {
-    return (
-      <div className="py-2 text-muted-foreground text-sm">
-        thought for{" "}
-        <span className="font-medium text-foreground/90 tabular-nums">
-          {elapsedText}
-        </span>
-      </div>
-    );
+  if (isCompleted) {
+    return null;
   }
 
-  return (
-    <div className="flex items-center gap-2 py-2 text-sm">
-      <span className="font-medium text-foreground/90 tabular-nums">
-        {elapsedText}
-      </span>
-      <ShimmerText className="text-muted-foreground" delay={0} duration={1.2}>
-        thinking...
-      </ShimmerText>
-    </div>
-  );
+  const activeLine =
+    rotatingLines[
+      rotatingLines.length > 0 ? lineIndex % rotatingLines.length : 0
+    ] ?? "Thinking...";
+  const startedAt = originUserCreatedAt ?? metadata.createdAt;
+
+  if (isHardError) {
+    return <LoadingStatus label="Thinking..." startedAt={startedAt} />;
+  }
+
+  return <LoadingStatus label={activeLine} startedAt={startedAt} />;
 }

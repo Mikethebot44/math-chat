@@ -209,17 +209,17 @@ async function generateContinuationMessage({
 
   const continuationPrompt = snapshot.failed
     ? [
-        `The Aristotle job ${snapshot.jobId} has finished with an error.`,
+        `The formal proof job ${snapshot.jobId} has finished with an error.`,
         "Continue the conversation for the user.",
-        "Explain briefly that Aristotle returned invalid Lean output.",
+        "Explain briefly that the tool returned invalid Lean output.",
         "Summarize the failure in plain English and suggest a next step.",
         "Do not call any tools in this response.",
       ].join(" ")
     : [
-        `The Aristotle job ${snapshot.jobId} has completed.`,
+        `The formal proof job ${snapshot.jobId} has completed.`,
         "Continue the conversation for the user.",
-        "Summarize the result and mention that the Lean code is available in the Aristotle tool output.",
-        "Do not invent Lean code beyond what Aristotle returned.",
+        "Summarize the result and mention that the Lean code is available in the tool output.",
+        "Do not invent Lean code beyond what the tool returned.",
         "Do not call any tools in this response.",
       ].join(" ");
 

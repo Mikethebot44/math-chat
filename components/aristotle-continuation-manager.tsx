@@ -1,12 +1,18 @@
 "use client";
 
 import { useChatActions, useChatStatus } from "@ai-sdk-tools/store";
+import { useQuery } from "@tanstack/react-query";
 import type { MutableRefObject } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import type { ChatMessage } from "@/lib/ai/types";
-import { useMessages } from "@/lib/stores/hooks-base";
+import {
+  findPendingAristotleSourceMessage,
+  useMessages,
+} from "@/lib/stores/hooks-base";
 import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
+import { useSession } from "@/providers/session-provider";
+import { useTRPC } from "@/trpc/react";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -18,34 +24,6 @@ interface AristotleContinuationResponse {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function getPendingAristotleSourceMessage(
-  messages: ChatMessage[]
-): ChatMessage | null {
-  const assistantMessages = messages.filter(
-    (message) => message.role === "assistant"
-  );
-
-  for (let index = assistantMessages.length - 1; index >= 0; index -= 1) {
-    const message = assistantMessages[index];
-
-    for (const part of message.parts) {
-      if (
-        (part.type === "tool-leanProof" ||
-          part.type === "tool-aristotleCheckJob") &&
-        part.state === "output-available" &&
-        isRecord(part.output) &&
-        typeof part.output.jobId === "string" &&
-        part.output.completed !== true &&
-        part.output.failed !== true
-      ) {
-        return message;
-      }
-    }
-  }
-
-  return null;
 }
 
 function upsertMessages(
@@ -174,21 +152,34 @@ async function pollAristotleContinuation({
 }
 
 export function AristotleContinuationManager({ chatId }: { chatId: string }) {
+  const { data: session } = useSession();
+  const trpc = useTRPC();
+  const { data: runtimeConfig } = useQuery({
+    ...trpc.chat.getRuntimeConfig.queryOptions(),
+    enabled: !!session?.user,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const status = useChatStatus();
   const messages = useMessages() as ChatMessage[];
   const { setMessages } = useChatActions<ChatMessage>();
   const addMessageToTree = useAddMessageToTree();
   const activeMessageIdRef = useRef<string | null>(null);
   const messagesRef = useRef(messages);
+  const isContinuationEnabled = !(
+    session?.user &&
+    runtimeConfig?.backgroundChatEnabled === true
+  );
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
   const pendingMessage = useMemo(
-    () => getPendingAristotleSourceMessage(messages),
-    [messages]
+    () =>
+      isContinuationEnabled ? findPendingAristotleSourceMessage(messages) : null,
+    [isContinuationEnabled, messages]
   );
+  const pendingMessageId = pendingMessage?.id ?? null;
 
   useEffect(() => {
     if (!pendingMessage || status !== "ready") {
@@ -227,7 +218,17 @@ export function AristotleContinuationManager({ chatId }: { chatId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [addMessageToTree, chatId, pendingMessage, setMessages, status]);
+  }, [
+    addMessageToTree,
+    chatId,
+    pendingMessageId,
+    setMessages,
+    status,
+  ]);
+
+  if (!isContinuationEnabled) {
+    return null;
+  }
 
   return null;
 }

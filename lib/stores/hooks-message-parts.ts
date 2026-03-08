@@ -71,6 +71,22 @@ export function useMessageResearchUpdatePartByToolCallId(
   );
 }
 
+export function useLatestRunStatusPart(
+  messageId: string
+): Extract<ChatMessage["parts"][number], { type: "data-runStatus" }> | null {
+  return usePartsStore(
+    (state) => {
+      const parts = state.getMessageById(messageId)?.parts ?? [];
+      const runStatusParts = parts.filter(
+        (part) => part.type === "data-runStatus"
+      ) as Extract<ChatMessage["parts"][number], { type: "data-runStatus" }>[];
+
+      return runStatusParts.at(-1) ?? null;
+    },
+    equal
+  );
+}
+
 export function useIsLastArtifact(toolCallId: string): boolean {
   return usePartsStore((state) => {
     const messages = state._throttledMessages || state.messages;

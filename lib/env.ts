@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from "@t3-oss/env-core";
 import { createEnv } from "@t3-oss/env-nextjs";
-import { serverEnvSchema } from "./env-schema";
+import { clientEnvSchema, serverEnvSchema } from "./env-schema";
 
 function formatValidationIssue(issue: StandardSchemaV1.Issue): string {
   const path =
@@ -10,8 +10,11 @@ function formatValidationIssue(issue: StandardSchemaV1.Issue): string {
 
 export const env = createEnv({
   server: serverEnvSchema,
-  client: {},
-  experimental__runtimeEnv: {},
+  client: clientEnvSchema,
+  experimental__runtimeEnv: {
+    NEXT_PUBLIC_BACKGROUND_CHAT_E2B:
+      process.env.NEXT_PUBLIC_BACKGROUND_CHAT_E2B,
+  },
   emptyStringAsUndefined: true,
   onValidationError: (issues) => {
     const details = issues.map(formatValidationIssue).join("; ");

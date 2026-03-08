@@ -3,13 +3,13 @@ import type { ChatMessage, ToolName } from "@/lib/ai/types";
 function buildToolInstruction(toolsToRequest: ToolName[]): string {
   if (toolsToRequest.length === 1 && toolsToRequest[0] === "leanProof") {
     return [
-      "I want to use Aristotle for this math problem.",
-      "First call the tool leanProof with:",
+      "I want to use the math agent for this problem.",
+      "First call the formal proof submission tool with:",
       '- "prompt": the full natural-language math problem or theorem statement,',
       '- "mode": "formalize_and_prove".',
       "Do not include Lean code, theorem names, or sandbox instructions in the tool input.",
-      "Stop after leanProof returns the Aristotle jobId and queued status.",
-      "Do not call aristotleCheckJob in the same response.",
+      "Stop after the tool returns the jobId and queued status.",
+      "Do not call the status-check tool in the same response.",
     ].join(" ");
   }
 
@@ -18,8 +18,8 @@ function buildToolInstruction(toolsToRequest: ToolName[]): string {
     toolsToRequest[0] === "aristotleCheckJob"
   ) {
     return [
-      "I want to check an Aristotle job.",
-      "Call aristotleCheckJob with the existing jobId.",
+      "I want to check the math agent job.",
+      "Call the status-check tool with the existing jobId.",
       "If you need the final Lean code, set waitForCompletion to true.",
     ].join(" ");
   }

@@ -1,4 +1,3 @@
-import { unstable_cache as cache } from "next/cache";
 import { config } from "@/lib/config";
 import type { AppModelId, ModelId } from "./app-model-id";
 import type { ModelData } from "./model-data";
@@ -18,6 +17,7 @@ export type AppModelDefinition = Omit<ModelData, "id"> & {
 };
 
 const DISABLED_MODELS = new Set(config.ai.disabledModels);
+const processCache = new Map<string, Promise<AppModelDefinition[]>>();
 
 function buildAppModels(models: ModelData[]): AppModelDefinition[] {
   return models
@@ -95,23 +95,36 @@ function buildScoutChatModels(
   });
 }
 
-const fetchAllAppModels = cache(
-  async (): Promise<AppModelDefinition[]> => {
+async function getOrCreateProcessCacheEntry(
+  key: string,
+  factory: () => Promise<AppModelDefinition[]>
+): Promise<AppModelDefinition[]> {
+  const existing = processCache.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = factory().catch((error) => {
+    processCache.delete(key);
+    throw error;
+  });
+  processCache.set(key, promise);
+  return promise;
+}
+
+async function fetchAllAppModels(): Promise<AppModelDefinition[]> {
+  return getOrCreateProcessCacheEntry("all-app-models", async () => {
     const models = await fetchModels();
     return buildAppModels(models);
-  },
-  ["all-app-models"],
-  { revalidate: 3600, tags: ["ai-gateway-models"] }
-);
+  });
+}
 
-export const fetchChatModels = cache(
-  async (): Promise<AppModelDefinition[]> => {
+export async function fetchChatModels(): Promise<AppModelDefinition[]> {
+  return getOrCreateProcessCacheEntry("chat-models", async () => {
     const appModels = await fetchAllAppModels();
     return buildScoutChatModels(appModels);
-  },
-  ["chat-models"],
-  { revalidate: 3600, tags: ["ai-gateway-models"] }
-);
+  });
+}
 
 export async function getAppModelDefinition(
   modelId: AppModelId

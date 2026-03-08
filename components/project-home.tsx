@@ -136,6 +136,7 @@ export function ProjectHome({
             autoFocus
             chatId={chatId}
             parentMessageId={parentMessageId}
+            projectId={projectId}
             status={status}
           />
         </div>

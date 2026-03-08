@@ -2,7 +2,10 @@
 import { useChatId, useChatStatus } from "@ai-sdk-tools/store";
 import { memo } from "react";
 import { config } from "@/lib/config";
-import { useMessageMetadataById } from "@/lib/stores/hooks-base";
+import {
+  useLatestAssistantChildCreatedAtByParentId,
+  useMessageMetadataById,
+} from "@/lib/stores/hooks-base";
 import { useMessagePartTypesById } from "@/lib/stores/hooks-message-parts";
 import { Message, MessageContent } from "./ai-elements/message";
 import { FollowUpSuggestionsParts } from "./followup-suggestions";
@@ -19,13 +22,24 @@ const PureAssistantMessage = ({
 }: Omit<BaseMessageProps, "parentMessageId">) => {
   const chatId = useChatId();
   const metadata = useMessageMetadataById(messageId);
+  const continuationCreatedAt =
+    useLatestAssistantChildCreatedAtByParentId(messageId);
   const partTypes = useMessagePartTypesById(messageId);
   const status = useChatStatus();
   const isReconnectingToMessageStream =
     metadata.activeStreamId !== null && status === "submitted";
   const hasAssistantText = partTypes.includes("text");
+  const hasAristotleTool =
+    partTypes.includes("tool-leanProof") ||
+    partTypes.includes("tool-aristotleCheckJob");
+  const shouldHideCompletedAristotleToolMessage =
+    hasAristotleTool && !hasAssistantText && continuationCreatedAt !== null;
 
-  if (!chatId || isReconnectingToMessageStream) {
+  if (
+    !chatId ||
+    isReconnectingToMessageStream ||
+    shouldHideCompletedAristotleToolMessage
+  ) {
     return null;
   }
 

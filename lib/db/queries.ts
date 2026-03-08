@@ -1,4 +1,3 @@
-import "server-only";
 import { del } from "@vercel/blob";
 import {
   and,
@@ -414,6 +413,7 @@ export async function updateMessage({
           createdAt: dbMessage.createdAt,
           parentMessageId: dbMessage.parentMessageId,
           lastContext: dbMessage.lastContext,
+          activeRunId: dbMessage.activeRunId,
           activeStreamId: dbMessage.activeStreamId,
         })
         .where(eq(message.id, id));
@@ -489,6 +489,7 @@ export async function getAllMessagesByChatId({
         role: msg.role as ChatMessage["role"],
         parts,
         metadata: {
+          activeRunId: msg.activeRunId,
           createdAt: msg.createdAt,
           activeStreamId: msg.activeStreamId,
           parentMessageId: msg.parentMessageId,
@@ -794,6 +795,7 @@ export async function getChatMessageWithPartsById({
         role: dbMessage.role as ChatMessage["role"],
         parts: dbParts.length > 0 ? mapDBPartsToUIParts(dbParts) : [],
         metadata: {
+          activeRunId: dbMessage.activeRunId,
           createdAt: dbMessage.createdAt,
           activeStreamId: dbMessage.activeStreamId,
           parentMessageId: dbMessage.parentMessageId,

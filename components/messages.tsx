@@ -5,7 +5,12 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { ConversationContent } from "@/components/ai-elements/extra/conversation-content-scroll-area";
-import { useMessageIds } from "@/lib/stores/hooks-base";
+import {
+  useChatBusyState,
+  useMessageIds,
+  useMessages,
+} from "@/lib/stores/hooks-base";
+import type { ChatMessage } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 import { Greeting } from "./greeting";
 import { PreviewMessage } from "./message";
@@ -20,7 +25,10 @@ const PureMessagesInternal = memo(
   ({ isReadonly }: PureMessagesInternalProps) => {
     const chatId = useChatId();
     const status = useChatStatus();
+    const { isBusy } = useChatBusyState();
     const messageIds = useMessageIds();
+    const messages = useMessages() as ChatMessage[];
+    const lastMessage = messages.at(-1) ?? null;
 
     if (!chatId) {
       return null;
@@ -44,9 +52,8 @@ const PureMessagesInternal = memo(
           />
         ))}
 
-        {status === "submitted" && messageIds.length > 0 && (
-          // messages[messages.length - 1].role === 'user' &&
-          <ThinkingMessage />
+        {isBusy && lastMessage?.role === "user" && (
+          <ThinkingMessage startedAt={lastMessage.metadata.createdAt} />
         )}
 
         {status === "error" && <ResponseErrorMessage />}

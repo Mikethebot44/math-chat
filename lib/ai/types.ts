@@ -71,6 +71,7 @@ const messageMetadataSchema = z.object({
   parentMessageId: z.string().nullable(),
   selectedModel: z.custom<AppModelId>((val) => typeof val === "string"),
   activeStreamId: z.string().nullable(),
+  activeRunId: z.string().nullable().optional(),
   selectedTool: frontendToolsSchema.optional(),
   usage: z.custom<LanguageModelUsage | undefined>((_val) => true).optional(),
 });
@@ -134,6 +135,20 @@ interface FollowupSuggestions {
   suggestions: string[];
 }
 
+export interface RunStatusData {
+  detail?: string;
+  label: string;
+  phase:
+    | "queued"
+    | "starting"
+    | "thinking"
+    | "tool"
+    | "waiting-aristotle"
+    | "finalizing";
+  startedAt: string;
+  updatedAt: string;
+}
+
 // biome-ignore lint/style/useConsistentTypeDefinitions: Custom UI payloads rely on a discriminated type alias for UIMessage generics.
 export type CustomUIDataTypes = {
   appendMessage: string;
@@ -142,6 +157,7 @@ export type CustomUIDataTypes = {
   };
   followupSuggestions: FollowupSuggestions;
   researchUpdate: ResearchUpdate;
+  runStatus: RunStatusData;
 };
 
 export type ChatMessage = Omit<

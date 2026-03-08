@@ -25,6 +25,9 @@ export function determineExplicitlyRequestedTools(
     return ["leanProof"];
   }
   if (selectedTool === "createTextDocument") {
+    if (!config.features.sandbox) {
+      return null;
+    }
     return [
       "createTextDocument",
       "createCodeDocument",

@@ -39,7 +39,7 @@ export const ConversationContent = ({
     >
       <div
         {...props}
-        className={cn("flex flex-col gap-8 p-4", className)}
+        className={cn("flex flex-col gap-6 p-4", className)}
         ref={context.contentRef}
       >
         {typeof children === "function" ? children(context) : children}

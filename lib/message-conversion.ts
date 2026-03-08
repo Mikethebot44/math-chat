@@ -26,6 +26,7 @@ function _dbMessageToChatMessage(message: DBMessage): ChatMessage {
     parts: [], // Parts are stored in Part table - use getAllMessagesByChatId instead
     role: message.role as ChatMessage["role"],
     metadata: {
+      activeRunId: message.activeRunId,
       createdAt: message.createdAt,
       activeStreamId: message.activeStreamId,
       parentMessageId: message.parentMessageId,
@@ -66,6 +67,7 @@ export function chatMessageToDbMessage(
     parentMessageId,
     selectedModel,
     selectedTool: message.metadata?.selectedTool || null,
+    activeRunId: message.metadata?.activeRunId || null,
     activeStreamId: message.metadata?.activeStreamId || null,
     canceledAt: null,
   };

@@ -24,7 +24,7 @@ const config: ConfigInput = {
     paymentProcessors: [],
   },
   features: {
-    sandbox: false,
+    sandbox: false, // Disables canvas/document tool surfaces and sandbox UI
     webSearch: false,
     urlRetrieval: false,
     deepResearch: false,

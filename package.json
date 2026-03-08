@@ -37,7 +37,10 @@
     "test:types": "rm -rf .next/dev/types && next typegen . && tsc --noEmit",
     "ai:devtools": "bunx @ai-sdk/devtools",
     "fetch:models": "bun scripts/fetch-models.ts && bun format",
-    "e2b:build:lean": "tsx e2b/lean4/build.ts"
+    "e2b:build:lean": "tsx e2b/lean4/build.ts",
+    "e2b:build:chat": "tsx e2b/chat-agent/build.ts",
+    "agent-runs:worker": "tsx scripts/agent-run-worker.ts",
+    "agent-runs:worker:once": "tsx scripts/agent-run-worker.ts --once"
   },
   "dependencies": {
     "@ai-sdk-tools/store": "1.2.0",

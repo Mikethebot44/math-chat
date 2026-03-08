@@ -60,12 +60,12 @@ export const toolsDefinitions: Record<ToolName, ToolDefinition> = {
   },
   leanProof: {
     name: "leanProof",
-    description: "Submit a natural-language proof problem to Aristotle",
+    description: "Submit a natural-language proof problem to the math agent",
     cost: 0,
   },
   aristotleCheckJob: {
     name: "aristotleCheckJob",
-    description: "Check an Aristotle job and fetch Lean code",
+    description: "Check a math agent job and fetch Lean code",
     cost: 0,
   },
   generateImage: {

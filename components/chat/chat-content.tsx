@@ -30,6 +30,7 @@ function PureChatContent({
         chatId={chatId}
         className={cn("bg-background", className)}
         isReadonly={isReadonly}
+        projectId={projectId}
         status={status}
       />
     ) : (

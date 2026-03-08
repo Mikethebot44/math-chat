@@ -57,12 +57,16 @@ export function getTools({
 
   return {
     getWeather,
-    createTextDocument: createTextDocumentTool(documentToolProps),
-    createCodeDocument: createCodeDocumentTool(documentToolProps),
-    createSheetDocument: createSheetDocumentTool(documentToolProps),
-    editTextDocument: editTextDocumentTool(documentToolProps),
-    editCodeDocument: editCodeDocumentTool(documentToolProps),
-    editSheetDocument: editSheetDocumentTool(documentToolProps),
+    ...(config.features.sandbox
+      ? {
+          createTextDocument: createTextDocumentTool(documentToolProps),
+          createCodeDocument: createCodeDocumentTool(documentToolProps),
+          createSheetDocument: createSheetDocumentTool(documentToolProps),
+          editTextDocument: editTextDocumentTool(documentToolProps),
+          editCodeDocument: editCodeDocumentTool(documentToolProps),
+          editSheetDocument: editSheetDocumentTool(documentToolProps),
+        }
+      : {}),
     readDocument: readDocument({
       session,
       dataStream,

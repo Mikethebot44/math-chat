@@ -25,6 +25,8 @@ import {
   updateChatVisiblityById,
   updateMessageCanceledAt,
 } from "@/lib/db/queries";
+import { requestAgentRunCancellation } from "@/lib/db/agent-runs";
+import { isBackgroundChatEnabled } from "@/lib/agent-runs/config";
 import { MAX_MESSAGE_CHARS } from "@/lib/limits/tokens";
 import { dbChatToUIChat } from "@/lib/message-conversion";
 import { generateUUID } from "@/lib/utils";
@@ -35,6 +37,12 @@ import {
 } from "@/trpc/init";
 
 export const chatRouter = createTRPCRouter({
+  getRuntimeConfig: publicProcedure.query(() => {
+    return {
+      backgroundChatEnabled: isBackgroundChatEnabled(),
+    };
+  }),
+
   getAllChats: protectedProcedure
     .input(
       z
@@ -213,6 +221,10 @@ export const chatRouter = createTRPCRouter({
         messageId: input.messageId,
         canceledAt: new Date(),
       });
+
+      if (msg.activeRunId) {
+        await requestAgentRunCancellation({ runId: msg.activeRunId });
+      }
 
       return { success: true };
     }),

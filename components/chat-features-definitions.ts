@@ -24,7 +24,7 @@ export const toolDefinitions: Record<UiToolName, ToolDefinition> = {
     shortName: "Research",
   },
   leanProof: {
-    name: "Aristotle",
+    name: "Math Agent",
     icon: Sigma,
     shortName: "Proof",
   },
@@ -43,8 +43,6 @@ export const toolDefinitions: Record<UiToolName, ToolDefinition> = {
  * Mirrors the conditional logic in lib/ai/tools/tools.ts
  */
 export const enabledTools: UiToolName[] = [
-  // Canvas tools are always available
-  "createTextDocument",
   // Web search tool
   ...(config.ai.tools.webSearch.enabled ? (["webSearch"] as const) : []),
   // Deep research tool

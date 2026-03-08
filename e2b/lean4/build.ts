@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../../scripts/load-env";
 import { defaultBuildLogger, Template } from "e2b";
 import { lean4Template, lean4TemplateName } from "./template";
 

@@ -1,14 +1,12 @@
 "use client";
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChatActions, useChatStoreApi } from "@ai-sdk-tools/store";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { CameraIcon, FileIcon, ImageIcon, PlusIcon } from "lucide-react";
 import type React from "react";
 import {
   type ChangeEvent,
-  type Dispatch,
   memo,
-  type SetStateAction,
   useCallback,
   useMemo,
   useRef,
@@ -28,12 +26,16 @@ import { ContextUsageFromParent } from "@/components/context-usage";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  cancelAgentRun,
+  enqueueAuthenticatedChatMessage,
+} from "@/lib/agent-runs/client";
 import type { AppModelId } from "@/lib/ai/app-model-id";
 import { SCOUT_MODEL_IDS } from "@/lib/ai/scout-models";
-import type { Attachment, ChatMessage, UiToolName } from "@/lib/ai/types";
+import type { Attachment, ChatMessage } from "@/lib/ai/types";
 import { config } from "@/lib/config";
 import { processFilesForUpload } from "@/lib/files/upload-prep";
-import { useLastMessageId } from "@/lib/stores/hooks-base";
+import { useChatBusyState, useLastMessageId } from "@/lib/stores/hooks-base";
 import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { cn, generateUUID } from "@/lib/utils";
@@ -44,7 +46,6 @@ import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
 import { ConnectorsDropdown } from "./connectors-dropdown";
 import { LexicalChatInput } from "./lexical-chat-input";
-import { ResponsiveTools } from "./responsive-tools";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,6 +87,7 @@ function PureMultimodalInput({
   autoFocus = false,
   isEditMode = false,
   parentMessageId,
+  projectId,
   onSendMessage,
 }: {
   chatId: string;
@@ -94,26 +96,34 @@ function PureMultimodalInput({
   autoFocus?: boolean;
   isEditMode?: boolean;
   parentMessageId: string | null;
+  projectId?: string;
   onSendMessage?: (message: ChatMessage) => void | Promise<void>;
 }) {
   const storeApi = useChatStoreApi<ChatMessage>();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const trpc = useTRPC();
+  const { data: runtimeConfig } = useQuery({
+    ...trpc.chat.getRuntimeConfig.queryOptions(),
+    enabled: !!session?.user,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
-  useChatId();
+  const { confirmChatId } = useChatId();
   const {
+    setError,
     setMessages,
+    setStatus,
     sendMessage,
     stop: stopHelper,
   } = useChatActions<ChatMessage>();
   const lastMessageId = useLastMessageId();
+  const { displayStatus, hasPendingAristotle, isBusy } = useChatBusyState();
   const {
     editorRef,
     selectedTool,
-    setSelectedTool,
     attachments,
     setAttachments,
     selectedModelId,
@@ -126,6 +136,8 @@ function PureMultimodalInput({
   } = useChatInput();
 
   const isAnonymous = !session?.user;
+  const useBackgroundChat =
+    !!session?.user && runtimeConfig?.backgroundChatEnabled === true;
   const isModelDisallowedForAnonymous =
     isAnonymous &&
     !(ANONYMOUS_LIMITS.AVAILABLE_MODELS as readonly AppModelId[]).includes(
@@ -184,7 +196,7 @@ function PureMultimodalInput({
     if (isModelDisallowedForAnonymous) {
       return { enabled: false, message: "Log in to use this model" };
     }
-    if (status !== "ready" && status !== "error") {
+    if (isBusy) {
       return {
         enabled: false,
         message: "Please wait for the model to finish its response!",
@@ -203,7 +215,7 @@ function PureMultimodalInput({
       };
     }
     return { enabled: true };
-  }, [isEmpty, isModelDisallowedForAnonymous, status, uploadQueue.length]);
+  }, [isBusy, isEmpty, isModelDisallowedForAnonymous, uploadQueue.length]);
 
   // Helper function to process and validate files
   const processFiles = useCallback(
@@ -349,6 +361,7 @@ function PureMultimodalInput({
         },
       ],
       metadata: {
+        activeRunId: null,
         createdAt: new Date(),
         parentMessageId: effectiveParentMessageId,
         selectedModel: selectedModelId,
@@ -363,7 +376,42 @@ function PureMultimodalInput({
     addMessageToTree(message);
     saveChatMessage({ message, chatId });
 
-    sendMessage(message);
+    if (useBackgroundChat) {
+      const currentMessages = storeApi.getState().messages;
+      setMessages([...currentMessages, message]);
+      setError(undefined);
+      setStatus("submitted");
+      void enqueueAuthenticatedChatMessage({
+        chatId,
+        message,
+        projectId,
+      })
+        .then((payload) => {
+          confirmChatId(payload.chatId);
+          addMessageToTree(payload.assistantMessage);
+          const nextMessages = storeApi.getState().messages;
+          const hasAssistantPlaceholder = nextMessages.some(
+            (candidate) => candidate.id === payload.assistantMessage.id
+          );
+          if (!hasAssistantPlaceholder) {
+            setMessages([...nextMessages, payload.assistantMessage]);
+          }
+          saveChatMessage({
+            chatId,
+            message: payload.assistantMessage,
+          });
+        })
+        .catch((error) => {
+          console.error(error);
+          setStatus("error");
+          setError(
+            error instanceof Error ? error : new Error("Failed to enqueue chat")
+          );
+          toast.error("Failed to send message");
+        });
+    } else {
+      sendMessage(message);
+    }
 
     // Refocus after submit
     if (!isMobile) {
@@ -379,13 +427,19 @@ function PureMultimodalInput({
     getInputValue,
     saveChatMessage,
     parentMessageId,
+    projectId,
     selectedModelId,
     editorRef,
     lastMessageId,
     onSendMessage,
+    confirmChatId,
+    setError,
+    setStatus,
     sendMessage,
+    useBackgroundChat,
     updateChatUrl,
     trimMessagesInEditMode,
+    storeApi,
   ]);
 
   const submitForm = useCallback(() => {
@@ -460,7 +514,7 @@ function PureMultimodalInput({
 
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent) => {
-      if (status !== "ready") {
+      if (isBusy) {
         return;
       }
 
@@ -518,7 +572,7 @@ function PureMultimodalInput({
     [
       setAttachments,
       processFiles,
-      status,
+      isBusy,
       session,
       uploadFile,
       attachmentsEnabled,
@@ -573,17 +627,38 @@ function PureMultimodalInput({
       }
     },
     noClick: true, // Prevent click to open file dialog since we have the button
-    disabled: status !== "ready" || !attachmentsEnabled,
+    disabled: isBusy || !attachmentsEnabled,
     noDrag: !attachmentsEnabled,
     accept: acceptedTypes,
   });
 
   const handleStop = useCallback(() => {
-    if (session?.user && lastMessageId) {
+    if (session?.user && useBackgroundChat && lastMessageId) {
+      const lastMessage = storeApi
+        .getState()
+        .getThrottledMessages()
+        .find((message: ChatMessage) => message.id === lastMessageId);
+      const activeRunId = lastMessage?.metadata?.activeRunId;
+      if (activeRunId) {
+        void cancelAgentRun(activeRunId).catch((error) => {
+          console.error(error);
+          toast.error("Failed to cancel background run");
+        });
+      } else {
+        stopStreamMutation.mutate({ messageId: lastMessageId });
+      }
+    } else if (session?.user && lastMessageId) {
       stopStreamMutation.mutate({ messageId: lastMessageId });
     }
     stopHelper?.();
-  }, [lastMessageId, session?.user, stopHelper, stopStreamMutation]);
+  }, [
+    lastMessageId,
+    session?.user,
+    stopHelper,
+    stopStreamMutation,
+    storeApi,
+    useBackgroundChat,
+  ]);
 
   return (
     <div className="relative">
@@ -683,9 +758,9 @@ function PureMultimodalInput({
             onStop={handleStop}
             parentMessageId={parentMessageId}
             selectedModelId={selectedModelId}
-            selectedTool={selectedTool}
-            setSelectedTool={setSelectedTool}
             status={status}
+            displayStatus={displayStatus}
+            hasPendingAristotle={hasPendingAristotle}
             submission={submission}
             submitForm={submitForm}
           />
@@ -697,13 +772,13 @@ function PureMultimodalInput({
 
 function PureAttachmentsButton({
   fileInputRef,
-  status,
+  displayStatus,
   acceptAll,
   acceptImages,
   acceptFiles,
 }: {
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  status: UseChatHelpers<ChatMessage>["status"];
+  displayStatus: UseChatHelpers<ChatMessage>["status"];
   acceptAll: string;
   acceptImages: string;
   acceptFiles: string;
@@ -748,7 +823,7 @@ function PureAttachmentsButton({
             <PromptInputButton
               className="size-8"
               data-testid="attachments-button"
-              disabled={status !== "ready"}
+              disabled={displayStatus !== "ready"}
               onClick={() => setShowLoginPopover(true)}
               variant="ghost"
             >
@@ -771,7 +846,7 @@ function PureAttachmentsButton({
           <PromptInputButton
             className="size-8"
             data-testid="attachments-button"
-            disabled={status !== "ready"}
+            disabled={displayStatus !== "ready"}
             variant="ghost"
           >
             <PlusIcon className="size-4" />
@@ -806,7 +881,7 @@ function PureAttachmentsButton({
             <PromptInputButton
               className="@[500px]:size-10 size-8"
               data-testid="attachments-button"
-              disabled={status !== "ready"}
+              disabled={displayStatus !== "ready"}
               onClick={handleDesktopClick}
               variant="ghost"
             >
@@ -830,10 +905,10 @@ const AttachmentsButton = memo(PureAttachmentsButton);
 
 function PureChatInputBottomControls({
   selectedModelId,
-  selectedTool,
-  setSelectedTool,
   fileInputRef,
   status,
+  displayStatus,
+  hasPendingAristotle,
   submitForm,
   submission,
   parentMessageId,
@@ -844,10 +919,10 @@ function PureChatInputBottomControls({
   onStop,
 }: {
   selectedModelId: AppModelId;
-  selectedTool: UiToolName | null;
-  setSelectedTool: Dispatch<SetStateAction<UiToolName | null>>;
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
+  displayStatus: UseChatHelpers<ChatMessage>["status"];
+  hasPendingAristotle: boolean;
   submitForm: () => void;
   submission: { enabled: boolean; message?: string };
   parentMessageId: string | null;
@@ -865,16 +940,11 @@ function PureChatInputBottomControls({
             acceptAll={acceptAll}
             acceptFiles={acceptFiles}
             acceptImages={acceptImages}
+            displayStatus={displayStatus}
             fileInputRef={fileInputRef}
-            status={status}
           />
         )}
         <ConnectorsDropdown />
-        <ResponsiveTools
-          selectedModelId={selectedModelId}
-          setTools={setSelectedTool}
-          tools={selectedTool}
-        />
       </PromptInputTools>
       <div className="flex items-center gap-1">
         <ContextUsageFromParent
@@ -885,9 +955,14 @@ function PureChatInputBottomControls({
         />
         <PromptInputSubmit
           className={"@[500px]:size-10 size-8 shrink-0"}
-          disabled={status === "ready" && !submission.enabled}
+          disabled={
+            hasPendingAristotle || (displayStatus === "ready" && !submission.enabled)
+          }
           onClick={(e) => {
             e.preventDefault();
+            if (hasPendingAristotle) {
+              return;
+            }
             if (status === "streaming" || status === "submitted") {
               onStop();
             } else if (status === "ready" || status === "error") {
@@ -900,7 +975,7 @@ function PureChatInputBottomControls({
               submitForm();
             }
           }}
-          status={status}
+          status={displayStatus}
         />
       </div>
     </PromptInputFooter>
