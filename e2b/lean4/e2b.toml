@@ -1,0 +1,16 @@
+# This is a config for E2B sandbox template.
+# You can use template ID (h19s0vpbbgnd4ixo247k) or template name (lean4-math-chat) to create a sandbox:
+
+# Python SDK
+# from e2b import Sandbox, AsyncSandbox
+# sandbox = Sandbox.create("lean4-math-chat") # Sync sandbox
+# sandbox = await AsyncSandbox.create("lean4-math-chat") # Async sandbox
+
+# JS SDK
+# import { Sandbox } from 'e2b'
+# const sandbox = await Sandbox.create('lean4-math-chat')
+
+team_id = "08c2511e-9468-4e00-8f8d-739f1694d69c"
+dockerfile = "e2b.Dockerfile"
+template_name = "lean4-math-chat"
+template_id = "h19s0vpbbgnd4ixo247k"

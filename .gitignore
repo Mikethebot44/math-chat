@@ -1,0 +1,7 @@
+node_modules
+.devtools
+.env*
+.next
+.cursor
+.claude
+.tmp
