@@ -1,5 +1,6 @@
 import { NewChatButton } from "@/components/new-chat-button";
 import { SearchChatsButton } from "@/components/search-chats";
+import { SearchMathButton } from "@/components/search-math";
 import { SidebarTopRow } from "@/components/sidebar-top-row";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -30,6 +31,10 @@ export function AppSidebar() {
 
           <SidebarMenuItem>
             <SearchChatsButton />
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SearchMathButton />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
