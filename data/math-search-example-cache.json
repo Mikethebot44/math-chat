@@ -1,0 +1,284 @@
+{
+  "examples": [
+    {
+      "query": "compact manifolds",
+      "results": [
+        {
+          "id": "theorem_slogan_428609",
+          "metadata": {
+            "row_index": 428609,
+            "slogan": "A compact manifold with constant curvature has a cut locus of size two.",
+            "theorem_id": 18608461
+          },
+          "source": "theorem",
+          "vectorScore": 0.736211836,
+          "rerankScore": 0.7422152774880653
+        },
+        {
+          "id": "theorem_slogan_503861",
+          "metadata": {
+            "row_index": 503861,
+            "slogan": "The set of conformal metrics with constant scalar curvature on a compact manifold is finite.",
+            "theorem_id": 18825556
+          },
+          "source": "theorem",
+          "vectorScore": 0.740910172,
+          "rerankScore": 0.7070767905834733
+        },
+        {
+          "id": "theorem_slogan_168441",
+          "metadata": {
+            "row_index": 168441,
+            "slogan": "A compact Riemannian n-manifold with sectional curvature at least one and diameter at least pi over two is homeomorphic to the n-sphere.",
+            "theorem_id": 17845054
+          },
+          "source": "theorem",
+          "vectorScore": 0.738614202,
+          "rerankScore": 0.6983825254130697
+        },
+        {
+          "id": "theorem_slogan_506364",
+          "metadata": {
+            "row_index": 506364,
+            "slogan": "A closed Riemannian manifold with positive isotropic curvature is diffeomorphic to a spherical space form.",
+            "theorem_id": 18834492
+          },
+          "source": "theorem",
+          "vectorScore": 0.750809252,
+          "rerankScore": 0.6907929843587037
+        },
+        {
+          "id": "theorem_slogan_391383",
+          "metadata": {
+            "row_index": 391383,
+            "slogan": "A compact orientable formal manifold with negative Euler characteristic has a non-formal unit tangent bundle.",
+            "theorem_id": 18499301
+          },
+          "source": "theorem",
+          "vectorScore": 0.738573,
+          "rerankScore": 0.6747163417551526
+        },
+        {
+          "id": "theorem_slogan_601517",
+          "metadata": {
+            "row_index": 601517,
+            "slogan": "A compact complex surface with even first Betti number is formal.",
+            "theorem_id": 19127787
+          },
+          "source": "theorem",
+          "vectorScore": 0.744313061,
+          "rerankScore": 0.6746002469627796
+        },
+        {
+          "id": "theorem_slogan_873058",
+          "metadata": {
+            "row_index": 873058,
+            "slogan": "A closed Riemannian manifold has an optimal nested sweepout parametrized by volume.",
+            "theorem_id": 23967266
+          },
+          "source": "theorem",
+          "vectorScore": 0.749117315,
+          "rerankScore": 0.6695352105043246
+        },
+        {
+          "id": "theorem_slogan_1030876",
+          "metadata": {
+            "row_index": 1030876,
+            "slogan": "Two manifolds formed by connected sum with twisted sphere bundles are diffeomorphic relative to their boundaries.",
+            "theorem_id": 24494953
+          },
+          "source": "theorem",
+          "vectorScore": 0.733395934,
+          "rerankScore": 0.65979029568798
+        }
+      ]
+    },
+    {
+      "query": "fundamental group",
+      "results": [
+        {
+          "id": "theorem_slogan_819824",
+          "metadata": {
+            "row_index": 819824,
+            "slogan": "The fundamental group of the circle is isomorphic to the integers.",
+            "theorem_id": 23788438
+          },
+          "source": "theorem",
+          "vectorScore": 0.779437244,
+          "rerankScore": 0.7842333645583504
+        },
+        {
+          "id": "theorem_slogan_831684",
+          "metadata": {
+            "row_index": 831684,
+            "slogan": "The fundamental group of the space F(X) is isomorphic to the fundamental group of X.",
+            "theorem_id": 23829242
+          },
+          "source": "theorem",
+          "vectorScore": 0.775118351,
+          "rerankScore": 0.7621247397256999
+        },
+        {
+          "id": "theorem_slogan_269334",
+          "metadata": {
+            "row_index": 269334,
+            "slogan": "The fundamental group of a space based at a point is a homogeneous space.",
+            "theorem_id": 18136048
+          },
+          "source": "theorem",
+          "vectorScore": 0.770291507,
+          "rerankScore": 0.7577860134086826
+        },
+        {
+          "id": "theorem_slogan_1157783",
+          "metadata": {
+            "row_index": 1157783,
+            "slogan": "The fundamental group of the circle is isomorphic to the integers. All higher homotopy groups of the circle are trivial.",
+            "theorem_id": 26058831
+          },
+          "source": "theorem",
+          "vectorScore": 0.766604841,
+          "rerankScore": 0.7563440062124114
+        },
+        {
+          "id": "theorem_slogan_269350",
+          "metadata": {
+            "row_index": 269350,
+            "slogan": "The fundamental group of the Hawaiian earring based at the canonical wild point is not a topological group.",
+            "theorem_id": 18136064
+          },
+          "source": "theorem",
+          "vectorScore": 0.810099065,
+          "rerankScore": 0.7327452857698182
+        },
+        {
+          "id": "theorem_slogan_440822",
+          "metadata": {
+            "row_index": 440822,
+            "slogan": "The fundamental group of the Teichmuller space is isomorphic to the fundamental group of the underlying topological space.",
+            "theorem_id": 18644698
+          },
+          "source": "theorem",
+          "vectorScore": 0.769915164,
+          "rerankScore": 0.7118907172510923
+        },
+        {
+          "id": "theorem_slogan_860512",
+          "metadata": {
+            "row_index": 860512,
+            "slogan": "A homeomorphism between spaces induces an isomorphism on their fundamental groups.",
+            "theorem_id": 23925586
+          },
+          "source": "theorem",
+          "vectorScore": 0.787571847,
+          "rerankScore": 0.709956652317424
+        },
+        {
+          "id": "theorem_slogan_630719",
+          "metadata": {
+            "row_index": 630719,
+            "slogan": "The fundamental group of the n-th wedge sum of circles is isomorphic to the free abelian group of rank n.",
+            "theorem_id": 19220123
+          },
+          "source": "theorem",
+          "vectorScore": 0.773201525,
+          "rerankScore": 0.709864936388691
+        }
+      ]
+    },
+    {
+      "query": "cohomology ring",
+      "results": [
+        {
+          "id": "theorem_slogan_139199",
+          "metadata": {
+            "row_index": 139199,
+            "slogan": "The cohomology ring of the universal cover with integer coefficients is finitely generated as a module over the group ring of the fundamental group.",
+            "theorem_id": 17761584
+          },
+          "source": "theorem",
+          "vectorScore": 0.769335508,
+          "rerankScore": 0.7035354766916397
+        },
+        {
+          "id": "theorem_slogan_801631",
+          "metadata": {
+            "row_index": 801631,
+            "slogan": "The cohomology ring of the open Whitney sum bundle equals the cohomology ring of the first stage of the Whitney sum bundle.",
+            "theorem_id": 23190860
+          },
+          "source": "theorem",
+          "vectorScore": 0.755281627,
+          "rerankScore": 0.7007207792642843
+        },
+        {
+          "id": "theorem_slogan_139165",
+          "metadata": {
+            "row_index": 139165,
+            "slogan": "The integral cohomology ring of the universal cover is finitely generated as a module over the integers.",
+            "theorem_id": 17761550
+          },
+          "source": "theorem",
+          "vectorScore": 0.757426441,
+          "rerankScore": 0.7004510077256293
+        },
+        {
+          "id": "theorem_slogan_428733",
+          "metadata": {
+            "row_index": 428733,
+            "slogan": "The cohomology ring of the quotient of KA by the ideal generated by iota with rational coefficients is a Koszul algebra.",
+            "theorem_id": 18608749
+          },
+          "source": "theorem",
+          "vectorScore": 0.752278864,
+          "rerankScore": 0.6775073519524691
+        },
+        {
+          "id": "theorem_slogan_19466",
+          "metadata": {
+            "row_index": 19466,
+            "slogan": "The cohomology of an algebraic or Hamiltonian GKM space with integer coefficients is torsion-free.",
+            "theorem_id": 17409533
+          },
+          "source": "theorem",
+          "vectorScore": 0.750951946,
+          "rerankScore": 0.6757984557247343
+        },
+        {
+          "id": "theorem_slogan_569446",
+          "metadata": {
+            "row_index": 569446,
+            "slogan": "The cohomology of the omnibus complex equals the cohomology of the Lie algebra.",
+            "theorem_id": 19028054
+          },
+          "source": "theorem",
+          "vectorScore": 0.750550628,
+          "rerankScore": 0.6678014379267332
+        },
+        {
+          "id": "theorem_slogan_143034",
+          "metadata": {
+            "row_index": 143034,
+            "slogan": "The cycle class map from the Chow ring modulo two to cohomology with mod two coefficients is injective for the classifying space of a group.",
+            "theorem_id": 17772068
+          },
+          "source": "theorem",
+          "vectorScore": 0.761817813,
+          "rerankScore": 0.6588380053643073
+        },
+        {
+          "id": "theorem_slogan_452978",
+          "metadata": {
+            "row_index": 452978,
+            "slogan": "The rational cohomology ring of the infinite complex flag manifold is isomorphic to the rational numbers.",
+            "theorem_id": 18679126
+          },
+          "source": "theorem",
+          "vectorScore": 0.753571451,
+          "rerankScore": 0.6567968898370145
+        }
+      ]
+    }
+  ],
+  "generatedAt": "2026-03-09T11:28:12.127Z"
+}

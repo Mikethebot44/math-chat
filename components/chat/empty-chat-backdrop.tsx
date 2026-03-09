@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import AnimatedGradient from "@/components/animated-gradient";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +40,16 @@ const darkBackdropConfig = {
   shapeSize: 30,
 };
 
-export function EmptyChatBackdrop({ className }: { className?: string }) {
+export const EmptyChatBackdrop = memo(function EmptyChatBackdrop({
+  className,
+}: {
+  className?: string;
+}) {
   return (
     <div
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute inset-0 z-0 overflow-hidden",
+        "pointer-events-none fixed inset-0 z-0 overflow-hidden",
         className
       )}
     >
@@ -55,7 +60,7 @@ export function EmptyChatBackdrop({ className }: { className?: string }) {
         style={{
           zIndex: 0,
           opacity: 0.48,
-          filter: "blur(12px)",
+          filter: "blur(9px)",
           transform: "scale(1.03)",
         }}
       />
@@ -66,7 +71,7 @@ export function EmptyChatBackdrop({ className }: { className?: string }) {
         style={{
           zIndex: 0,
           opacity: 0.42,
-          filter: "blur(14px)",
+          filter: "blur(11px)",
           transform: "scale(1.04)",
         }}
       />
@@ -75,4 +80,4 @@ export function EmptyChatBackdrop({ className }: { className?: string }) {
       <div className="absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(247,247,245,0.34)_0%,rgba(247,247,245,0.12)_28%,rgba(247,247,245,0.5)_100%)] dark:bg-[linear-gradient(180deg,rgba(23,23,23,0.22)_0%,rgba(23,23,23,0.08)_28%,rgba(23,23,23,0.46)_100%)]" />
     </div>
   );
-}
+});

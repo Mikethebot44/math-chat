@@ -9,9 +9,8 @@ export default async function ChatPageRoute({
 }) {
   const { id: chatId } = await params;
 
-  // Prefetch the queries used in chat-page.tsx
+  // Prefetch chat metadata only so the page shell can render immediately.
   prefetch(trpc.chat.getChatById.queryOptions({ chatId }));
-  prefetch(trpc.chat.getChatMessages.queryOptions({ chatId }));
 
   return (
     <HydrateClient>

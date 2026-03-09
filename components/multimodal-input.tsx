@@ -22,7 +22,6 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { ContextBar } from "@/components/context-bar";
-import { ContextUsageFromParent } from "@/components/context-usage";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
 import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
@@ -768,8 +767,6 @@ function PureMultimodalInput({
             attachmentsEnabled={attachmentsEnabled}
             fileInputRef={fileInputRef}
             onStop={handleStop}
-            parentMessageId={parentMessageId}
-            selectedModelId={selectedModelId}
             status={status}
             displayStatus={displayStatus}
             hasPendingAristotle={hasPendingAristotle}
@@ -916,28 +913,24 @@ function PureAttachmentsButton({
 const AttachmentsButton = memo(PureAttachmentsButton);
 
 function PureChatInputBottomControls({
-  selectedModelId,
   fileInputRef,
   status,
   displayStatus,
   hasPendingAristotle,
   submitForm,
   submission,
-  parentMessageId,
   acceptAll,
   acceptImages,
   acceptFiles,
   attachmentsEnabled,
   onStop,
 }: {
-  selectedModelId: AppModelId;
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
   displayStatus: UseChatHelpers<ChatMessage>["status"];
   hasPendingAristotle: boolean;
   submitForm: () => void;
   submission: { enabled: boolean; message?: string };
-  parentMessageId: string | null;
   acceptAll: string;
   acceptImages: string;
   acceptFiles: string;
@@ -958,38 +951,30 @@ function PureChatInputBottomControls({
         )}
         <ConnectorsDropdown />
       </PromptInputTools>
-      <div className="flex items-center gap-1">
-        <ContextUsageFromParent
-          className="@[500px]:block hidden"
-          iconOnly
-          parentMessageId={parentMessageId}
-          selectedModelId={selectedModelId}
-        />
-        <PromptInputSubmit
-          className={"@[500px]:size-10 size-8 shrink-0"}
-          disabled={
-            hasPendingAristotle || (displayStatus === "ready" && !submission.enabled)
+      <PromptInputSubmit
+        className={"@[500px]:size-10 size-8 shrink-0"}
+        disabled={
+          hasPendingAristotle || (displayStatus === "ready" && !submission.enabled)
+        }
+        onClick={(e) => {
+          e.preventDefault();
+          if (hasPendingAristotle) {
+            return;
           }
-          onClick={(e) => {
-            e.preventDefault();
-            if (hasPendingAristotle) {
+          if (status === "streaming" || status === "submitted") {
+            onStop();
+          } else if (status === "ready" || status === "error") {
+            if (!submission.enabled) {
+              if (submission.message) {
+                toast.error(submission.message);
+              }
               return;
             }
-            if (status === "streaming" || status === "submitted") {
-              onStop();
-            } else if (status === "ready" || status === "error") {
-              if (!submission.enabled) {
-                if (submission.message) {
-                  toast.error(submission.message);
-                }
-                return;
-              }
-              submitForm();
-            }
-          }}
-          status={displayStatus}
-        />
-      </div>
+            submitForm();
+          }
+        }}
+        status={displayStatus}
+      />
     </PromptInputFooter>
   );
 }
