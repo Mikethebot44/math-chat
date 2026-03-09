@@ -3,6 +3,7 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChatActions, useChatStoreApi } from "@ai-sdk-tools/store";
 import { useMutation } from "@tanstack/react-query";
 import { CameraIcon, FileIcon, ImageIcon, PlusIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import {
   type ChangeEvent,
@@ -101,13 +102,12 @@ function PureMultimodalInput({
   onSendMessage?: (message: ChatMessage) => void | Promise<void>;
 }) {
   const storeApi = useChatStoreApi<ChatMessage>();
+  const router = useRouter();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const trpc = useTRPC();
-  const {
-    backgroundChatEnabled: useBackgroundChat,
-    isRuntimeConfigResolved,
-  } = useBackgroundChatConfig();
+  const { backgroundChatEnabled: useBackgroundChat, isRuntimeConfigResolved } =
+    useBackgroundChatConfig();
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
@@ -454,8 +454,13 @@ function PureMultimodalInput({
   ]);
 
   const submitForm = useCallback(() => {
+    if (!session?.user) {
+      router.push("/login");
+      return;
+    }
+
     handleSubmit(coreSubmitLogic, isEditMode);
-  }, [handleSubmit, coreSubmitLogic, isEditMode]);
+  }, [session?.user, router, handleSubmit, coreSubmitLogic, isEditMode]);
 
   const uploadFile = useCallback(
     async (
@@ -716,12 +721,7 @@ function PureMultimodalInput({
             </div>
           )}
 
-          {!isEditMode && (
-            <LimitDisplay
-              className="p-2"
-              forceVariant={isModelDisallowedForAnonymous ? "model" : "credits"}
-            />
-          )}
+          {!isEditMode && <LimitDisplay className="p-2" forceVariant="model" />}
 
           <ContextBar
             attachments={attachments}
@@ -968,7 +968,8 @@ function PureChatInputBottomControls({
         <PromptInputSubmit
           className={"@[500px]:size-10 size-8 shrink-0"}
           disabled={
-            hasPendingAristotle || (displayStatus === "ready" && !submission.enabled)
+            hasPendingAristotle ||
+            (displayStatus === "ready" && !submission.enabled)
           }
           onClick={(e) => {
             e.preventDefault();
