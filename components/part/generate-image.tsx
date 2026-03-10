@@ -11,19 +11,31 @@ export type GenerateImageTool = Extract<
 
 export function GenerateImage({ tool }: { tool: GenerateImageTool }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const input = tool.input as { prompt?: string } | undefined;
+  const output = tool.output as
+    | {
+        imageUrl?: string;
+        prompt?: string;
+      }
+    | undefined;
+  const prompt = typeof input?.prompt === "string" ? input.prompt : "";
+  const imageUrl =
+    typeof output?.imageUrl === "string" ? output.imageUrl : null;
+  const outputPrompt =
+    typeof output?.prompt === "string" ? output.prompt : prompt;
 
   if (tool.state === "input-available") {
     return (
       <div className="flex w-full flex-col items-center justify-center gap-4 rounded-lg border p-8">
         <div className="h-64 w-full animate-pulse rounded-lg bg-muted-foreground/20" />
         <div className="text-muted-foreground">
-          Generating image: &quot;{tool.input.prompt}&quot;
+          Generating image: &quot;{prompt}&quot;
         </div>
       </div>
     );
   }
-  const output = tool.output;
-  if (!output) {
+
+  if (!(imageUrl && outputPrompt)) {
     return null;
   }
 
@@ -38,28 +50,28 @@ export function GenerateImage({ tool }: { tool: GenerateImageTool }) {
           >
             {/* biome-ignore lint/performance/noImgElement: Next/Image isn't desired for dynamic external URLs here */}
             <img
-              alt={output.prompt}
+              alt={outputPrompt}
               className="h-auto w-full max-w-full"
               height={512}
-              src={output.imageUrl}
+              src={imageUrl}
               width={512}
             />
           </button>
           <ImageActions
             className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100"
-            imageUrl={output.imageUrl}
+            imageUrl={imageUrl}
           />
         </div>
         <div className="p-4 pt-0">
           <p className="text-muted-foreground text-sm">
-            Generated from: &quot;{output.prompt}&quot;
+            Generated from: &quot;{outputPrompt}&quot;
           </p>
         </div>
       </div>
 
       <ImageModal
-        imageName={output.prompt}
-        imageUrl={output.imageUrl}
+        imageName={outputPrompt}
+        imageUrl={imageUrl}
         isOpen={dialogOpen}
         onClose={() => setDialogOpen(false)}
       />

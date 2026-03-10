@@ -3,13 +3,17 @@ import { z } from "zod";
 import { saveDocument } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { codeGuidelines } from "./code-guidelines";
-import type { DocumentToolContext, DocumentToolResult } from "./types";
+import type {
+  CreateDocumentToolInput,
+  DocumentToolContext,
+  DocumentToolResult,
+} from "./types";
 
 export const createCodeDocumentTool = ({
   session,
   messageId,
 }: DocumentToolContext) =>
-  tool({
+  tool<CreateDocumentToolInput, DocumentToolResult>({
     description: `Create a code document/file.
 
 Use for:
@@ -26,7 +30,10 @@ ${codeGuidelines}`,
       content: z.string().describe("The full code content of the document"),
     }),
 
-    async execute({ title, content }): Promise<DocumentToolResult> {
+    async execute({
+      title,
+      content,
+    }: CreateDocumentToolInput): Promise<DocumentToolResult> {
       const id = generateUUID();
 
       if (session.user?.id) {

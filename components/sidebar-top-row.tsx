@@ -12,11 +12,12 @@ import logoLight from "@/logo-light.png";
 import { useChatId } from "@/providers/chat-id-provider";
 
 export function SidebarTopRow() {
-  const { setOpenMobile, open, openMobile } = useSidebar();
+  const { setOpenMobile, open, openMobile, isSidebarHovered } = useSidebar();
   const { refreshChatID } = useChatId();
   const { resolvedTheme } = useTheme();
   const mounted = useMounted();
   const isExpanded = open || openMobile;
+  const showCollapsedLogoToggle = !(isExpanded || isSidebarHovered);
   const brandLogo = mounted && resolvedTheme === "dark" ? logoDark : logoLight;
 
   return (
@@ -48,7 +49,17 @@ export function SidebarTopRow() {
       <div
         className={isExpanded ? "shrink-0 md:px-2" : "shrink-0 translate-y-px"}
       >
-        <SidebarToggle />
+        <SidebarToggle>
+          {showCollapsedLogoToggle ? (
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="h-5 w-auto max-w-none object-contain"
+              loading="eager"
+              src={brandLogo}
+            />
+          ) : undefined}
+        </SidebarToggle>
       </div>
     </div>
   );

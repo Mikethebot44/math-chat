@@ -26,7 +26,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { MathSearchExampleEntry } from "@/lib/math-search/types";
+import type {
+  MathSearchExampleEntry,
+  MathSearchResult,
+} from "@/lib/math-search/types";
 import { Button } from "./ui/button";
 
 interface SearchMathDialogProps {
@@ -46,7 +49,7 @@ let preloadExampleSearchesPromise: Promise<MathSearchExampleEntry[]> | null =
 const fetchMathResults = async (
   query: string,
   signal?: AbortSignal
-): Promise<SearchMathResult[]> => {
+): Promise<MathSearchResult[]> => {
   const response = await fetch("/api/math-search", {
     body: JSON.stringify({ query }),
     headers: { "Content-Type": "application/json" },
@@ -56,7 +59,7 @@ const fetchMathResults = async (
 
   const payload = (await response.json()) as {
     error?: string;
-    results?: SearchMathResult[];
+    results?: MathSearchResult[];
   };
 
   if (!response.ok) {
@@ -162,7 +165,7 @@ const getPaperAbstract = (metadata: Record<string, unknown>): string => {
   return extractPaperAbstract(text) ?? "No abstract available.";
 };
 
-const getResultTitle = (result: SearchMathResult): string => {
+const getResultTitle = (result: MathSearchResult): string => {
   if (result.source === "theorem") {
     return truncateText(getTheoremSlogan(result.metadata), 88);
   }
@@ -170,7 +173,7 @@ const getResultTitle = (result: SearchMathResult): string => {
   return getPaperTitle(result.metadata);
 };
 
-const getResultSubtitle = (result: SearchMathResult): string => {
+const getResultSubtitle = (result: MathSearchResult): string => {
   if (result.source === "theorem") {
     const theoremId = getString(result.metadata, "theorem_id");
     return theoremId ? `Theorem ID ${theoremId}` : "Topology theorem";
@@ -181,7 +184,7 @@ const getResultSubtitle = (result: SearchMathResult): string => {
   return arxivId ? `${arxivId} - ${abstract}` : abstract;
 };
 
-const getSourceLabel = (source: SearchMathResult["source"]): string =>
+const getSourceLabel = (source: MathSearchResult["source"]): string =>
   source === "paper" ? "Paper" : "Theorem";
 
 const useExampleSearches = (open: boolean) => {
@@ -254,8 +257,8 @@ interface SearchMathResultsListProps {
   error: string | null;
   isLoading: boolean;
   isShowingExamples: boolean;
-  onSelectResult: (result: SearchMathResult) => void;
-  results: SearchMathResult[];
+  onSelectResult: (result: MathSearchResult) => void;
+  results: MathSearchResult[];
   trimmedQuery: string;
 }
 
@@ -426,8 +429,8 @@ export function SearchMathDialog({
   const deferredQuery = useDeferredValue(query);
   const trimmedQuery = query.trim();
   const trimmedDeferredQuery = deferredQuery.trim();
-  const [results, setResults] = useState<SearchMathResult[]>([]);
-  const [selectedResult, setSelectedResult] = useState<SearchMathResult | null>(
+  const [results, setResults] = useState<MathSearchResult[]>([]);
+  const [selectedResult, setSelectedResult] = useState<MathSearchResult | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(false);

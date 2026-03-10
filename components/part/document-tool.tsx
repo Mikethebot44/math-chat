@@ -3,6 +3,7 @@
 import { memo, useEffect } from "react";
 import { useArtifact } from "@/hooks/use-artifact";
 import {
+  type DocumentToolResult,
   type DocumentToolType,
   getToolKind,
   isEditTool,
@@ -31,9 +32,16 @@ function PureDocumentTool({
   const kind = getToolKind(tool.type);
   const isEdit = isEditTool(tool.type);
   const isLastArtifact = useIsLastArtifact(tool.toolCallId);
+  const input = tool.input as
+    | {
+        content?: string;
+        title?: string;
+      }
+    | undefined;
+  const output = tool.output as DocumentToolResult | undefined;
 
-  const inputTitle = tool.input?.title ?? "";
-  const inputContent = tool.input?.content ?? "";
+  const inputTitle = input?.title ?? "";
+  const inputContent = input?.content ?? "";
 
   // Sync streaming content to artifact panel
   useEffect(() => {
@@ -50,8 +58,7 @@ function PureDocumentTool({
       }));
     }
 
-    if (tool.state === "output-available" && tool.output) {
-      const output = tool.output;
+    if (tool.state === "output-available" && output) {
       if (output.status === "success") {
         setArtifact((prev) => ({
           ...prev,
@@ -61,10 +68,9 @@ function PureDocumentTool({
         }));
       }
     }
-  }, [tool, messageId, kind, inputTitle, inputContent, setArtifact]);
+  }, [tool.state, output, messageId, kind, inputTitle, inputContent, setArtifact]);
 
-  if (tool.state === "output-error" || tool.output?.status === "error") {
-    const output = tool.output;
+  if (tool.state === "output-error" || output?.status === "error") {
     const error = output?.status === "error" ? output.error : tool.errorText;
 
     return (
@@ -75,7 +81,7 @@ function PureDocumentTool({
   if (
     tool.state === "input-streaming" ||
     tool.state === "input-available" ||
-    (tool.state === "output-available" && tool.output)
+    (tool.state === "output-available" && output)
   ) {
     return (
       <DocumentPreview
@@ -84,9 +90,9 @@ function PureDocumentTool({
         isReadonly={isReadonly}
         messageId={messageId}
         output={
-          tool.output
+          output?.status === "success"
             ? {
-                documentId: tool.output.documentId,
+                documentId: output.documentId,
                 title: inputTitle,
                 kind,
               }

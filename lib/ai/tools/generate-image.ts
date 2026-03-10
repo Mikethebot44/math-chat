@@ -14,6 +14,15 @@ interface GenerateImageProps {
   selectedModel?: string;
 }
 
+interface GenerateImageInput {
+  prompt: string;
+}
+
+interface GenerateImageOutput {
+  imageUrl: string;
+  prompt: string;
+}
+
 const log = createModuleLogger("ai.tools.generate-image");
 
 type ImageMode = "edit" | "generate";
@@ -337,7 +346,7 @@ export const generateImageTool = ({
   selectedModel,
   costAccumulator,
 }: GenerateImageProps = {}) =>
-  tool({
+  tool<GenerateImageInput, GenerateImageOutput>({
     description: `Generate an image from a user-provided prompt.
 
 The assistant may make small, neutral adjustments to improve clarity, composition, or technical quality, while strictly preserving the user’s original intent, meaning, and message.
@@ -351,7 +360,9 @@ The assistant must not add new subjects, claims, branding, or alter the tone or 
           "The user’s image prompt. The original intent, message, and meaning must remain unchanged. No new ideas, claims, or content may be introduced."
         ),
     }),
-    execute: async ({ prompt }) => {
+    execute: async ({
+      prompt,
+    }: GenerateImageInput): Promise<GenerateImageOutput> => {
       const startMs = Date.now();
       const imageParts = attachments.filter(
         (part) => part.type === "file" && part.mediaType?.startsWith("image/")

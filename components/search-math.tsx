@@ -16,7 +16,9 @@ export function SearchMathButton() {
         tooltip="Search math"
       >
         <SquareFunctionIcon className="h-4 w-4" />
-        <span>Search Math</span>
+        <span className="group-data-[collapsible=icon]:hidden">
+          Search Math
+        </span>
       </SidebarMenuButton>
 
       {open && <SearchMathDialog onOpenChange={setOpen} open={open} />}

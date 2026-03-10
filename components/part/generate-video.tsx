@@ -8,20 +8,32 @@ export type GenerateVideoTool = Extract<
 >;
 
 export function GenerateVideo({ tool }: { tool: GenerateVideoTool }) {
+  const input = tool.input as { prompt?: string } | undefined;
+  const output = tool.output as
+    | {
+        prompt?: string;
+        videoUrl?: string;
+      }
+    | undefined;
+  const prompt = typeof input?.prompt === "string" ? input.prompt : "";
+  const outputPrompt =
+    typeof output?.prompt === "string" ? output.prompt : prompt;
+  const videoUrl =
+    typeof output?.videoUrl === "string" ? output.videoUrl : null;
+
   if (tool.state === "input-available") {
     return (
       <div className="flex w-full flex-col items-center justify-center gap-4 rounded-lg border p-8">
         <div className="h-64 w-full animate-pulse rounded-lg bg-muted-foreground/20" />
         <div className="text-muted-foreground">
-          Generating video: &quot;{tool.input.prompt}&quot;
+          Generating video: &quot;{prompt}&quot;
         </div>
       </div>
     );
   }
 
-  const output = tool.output;
-  if (!output) {
-    const fallbackPrompt = tool.input?.prompt ?? "the same idea";
+  if (!(videoUrl && outputPrompt)) {
+    const fallbackPrompt = prompt || "the same idea";
 
     return (
       <div className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border p-4 text-muted-foreground text-sm">
@@ -42,11 +54,11 @@ export function GenerateVideo({ tool }: { tool: GenerateVideoTool }) {
         loop
         muted
         playsInline
-        src={output.videoUrl}
+        src={videoUrl}
       />
       <div className="p-4 pt-0">
         <p className="text-muted-foreground text-sm">
-          Generated from: &quot;{output.prompt}&quot;
+          Generated from: &quot;{outputPrompt}&quot;
         </p>
       </div>
     </div>

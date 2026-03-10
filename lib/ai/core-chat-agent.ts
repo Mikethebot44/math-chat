@@ -1,4 +1,9 @@
-import { convertToModelMessages, stepCountIs, streamText } from "ai";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  type ToolSet,
+} from "ai";
 import { addExplicitToolRequestToMessages } from "@/app/(chat)/api/chat/add-explicit-tool-request-to-messages";
 import { filterPartsForLLM } from "@/app/(chat)/api/chat/filter-reasoning-parts";
 import { getRecentGeneratedImage } from "@/app/(chat)/api/chat/get-recent-generated-image";
@@ -82,10 +87,10 @@ export async function createCoreChatAgent({
     attachments: userMessage.parts.filter((part) => part.type === "file"),
     lastGeneratedImage,
     costAccumulator,
-  });
+  }) as ToolSet;
 
   // Merge base tools with MCP tools
-  const allTools = {
+  const allTools: ToolSet = {
     ...baseTools,
     ...mcpTools,
   };
@@ -100,12 +105,12 @@ export async function createCoreChatAgent({
   // 3. Build the final activeTools list (cast needed because MCP tools are dynamic)
   const activeTools = [
     ...new Set([...existingBaseActiveTools, ...mcpToolNames]),
-  ] as (keyof typeof allTools)[];
+  ];
 
   let toolChoice:
     | {
         type: "tool";
-        toolName: keyof typeof allTools & string;
+        toolName: string;
       }
     | "required"
     | undefined;
@@ -113,7 +118,7 @@ export async function createCoreChatAgent({
   if (explicitlyRequestedTools?.length === 1) {
     toolChoice = {
       type: "tool",
-      toolName: explicitlyRequestedTools[0] as keyof typeof allTools & string,
+      toolName: explicitlyRequestedTools[0],
     };
   } else if ((explicitlyRequestedTools?.length ?? 0) > 1) {
     toolChoice = "required";

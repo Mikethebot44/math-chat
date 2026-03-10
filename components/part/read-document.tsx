@@ -13,8 +13,10 @@ function PureReadDocument({ tool }: { tool: ReadDocumentTool }) {
   if (tool.state === "input-available") {
     return null;
   }
-  const result = tool.output;
-  if (!result) {
+
+  const output = tool.output as { title?: string } | undefined;
+  const title = typeof output?.title === "string" ? output.title : null;
+  if (!title) {
     return null;
   }
 
@@ -23,7 +25,7 @@ function PureReadDocument({ tool }: { tool: ReadDocumentTool }) {
       <File size={16} />
       <div className="flex items-center gap-1 text-left text-sm">
         <div className="">Read</div>
-        <div className="">&ldquo;{result.title}&rdquo;</div>
+        <div className="">&ldquo;{title}&rdquo;</div>
       </div>
     </div>
   );

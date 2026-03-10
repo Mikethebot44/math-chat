@@ -2,13 +2,17 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getDocumentById, saveDocument } from "@/lib/db/queries";
 import { sheetGuidelines } from "./sheet-guidelines";
-import type { DocumentToolContext, DocumentToolResult } from "./types";
+import type {
+  DocumentToolContext,
+  DocumentToolResult,
+  EditDocumentToolInput,
+} from "./types";
 
 export const editSheetDocumentTool = ({
   session,
   messageId,
 }: DocumentToolContext) =>
-  tool({
+  tool<EditDocumentToolInput, DocumentToolResult>({
     description: `Edit an existing spreadsheet document in CSV format.
 
 Use for editing:
@@ -29,7 +33,11 @@ Avoid:
       content: z.string().describe("The full updated CSV content"),
     }),
 
-    async execute({ documentId, title, content }): Promise<DocumentToolResult> {
+    async execute({
+      documentId,
+      title,
+      content,
+    }: EditDocumentToolInput): Promise<DocumentToolResult> {
       const document = await getDocumentById({ id: documentId });
 
       if (!document) {

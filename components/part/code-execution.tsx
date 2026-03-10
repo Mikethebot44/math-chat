@@ -33,8 +33,22 @@ function isPngChart(input: unknown): input is PngChart {
 }
 
 export function CodeExecution({ tool }: { tool: CodeExecutionTool }) {
-  const args = tool.input ?? { code: "", title: "", icon: "default" };
-  const result = tool.state === "output-available" ? tool.output : null;
+  const args = (tool.input as
+    | {
+        code?: string;
+        icon?: string;
+        title?: string;
+      }
+    | undefined) ?? { code: "", title: "", icon: "default" };
+  const result =
+    tool.state === "output-available"
+      ? (tool.output as
+          | {
+              chart?: unknown;
+              message?: string;
+            }
+          | null)
+      : null;
   const chart: BaseChart | null =
     result && isBaseChart(result.chart) ? result.chart : null;
   const pngChart: PngChart | null =

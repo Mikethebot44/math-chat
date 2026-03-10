@@ -3,13 +3,17 @@ import { z } from "zod";
 import { saveDocument } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { textGuidelines } from "./text-guidelines";
-import type { DocumentToolContext, DocumentToolResult } from "./types";
+import type {
+  CreateDocumentToolInput,
+  DocumentToolContext,
+  DocumentToolResult,
+} from "./types";
 
 export const createTextDocumentTool = ({
   session,
   messageId,
 }: DocumentToolContext) =>
-  tool({
+  tool<CreateDocumentToolInput, DocumentToolResult>({
     description: `Create a text document with markdown support.
 
 Use for:
@@ -26,7 +30,10 @@ The title should be descriptive of the content.`,
 
     // TODO: Optimize what's rendered to the model by excluding content from messages !== curMessage
     // toModelOutput: ({input}) => (),
-    async execute({ title, content }): Promise<DocumentToolResult> {
+    async execute({
+      title,
+      content,
+    }: CreateDocumentToolInput): Promise<DocumentToolResult> {
       const id = generateUUID();
 
       if (session.user?.id) {

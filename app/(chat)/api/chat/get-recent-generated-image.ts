@@ -9,13 +9,17 @@ export function getRecentGeneratedImage(
 
   if (lastAssistantMessage?.parts && lastAssistantMessage.parts.length > 0) {
     for (const part of lastAssistantMessage.parts) {
-      if (
-        part.type === "tool-generateImage" &&
-        part.state === "output-available" &&
-        part.output?.imageUrl
-      ) {
+      if (part.type !== "tool-generateImage") {
+        continue;
+      }
+
+      const output = part.output as Record<string, unknown> | undefined;
+      const imageUrl =
+        typeof output?.imageUrl === "string" ? output.imageUrl : null;
+
+      if (imageUrl) {
         return {
-          imageUrl: part.output.imageUrl,
+          imageUrl,
           name: `generated-image-${part.toolCallId}.png`,
         };
       }
