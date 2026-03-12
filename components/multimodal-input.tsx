@@ -46,6 +46,7 @@ import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
 import { ConnectorsDropdown } from "./connectors-dropdown";
+import { ContextUsageFromParent } from "./context-usage-from-parent";
 import { LexicalChatInput } from "./lexical-chat-input";
 import {
   DropdownMenu,
