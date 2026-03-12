@@ -7,7 +7,6 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 interface ChatLayoutContextValue {
@@ -37,14 +36,11 @@ export const ChatLayout = ({
   isSecondaryPanelVisible = false,
   ...props
 }: ChatLayoutProps) => {
-  const { state: sidebarState } = useSidebar();
-
   return (
     <ChatLayoutContext.Provider value={{ isSecondaryPanelVisible }}>
       <ResizablePanelGroup
         className={cn(
-          "@container flex h-dvh max-h-dvh w-full min-w-0 max-w-screen flex-col bg-background md:max-w-[calc(100vw-var(--sidebar-width))]",
-          sidebarState === "collapsed" && "md:max-w-screen",
+          "@container flex h-dvh max-h-dvh w-full min-w-0 max-w-screen flex-col bg-background",
           className
         )}
         direction="horizontal"

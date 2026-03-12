@@ -6,24 +6,19 @@ import type {
 } from "ai";
 import { z } from "zod";
 import type { codeExecution } from "@/lib/ai/tools/code-execution";
-import type { deepResearch } from "@/lib/ai/tools/deep-research/deep-research";
-import type { generateImageTool as generateImageToolFactory } from "@/lib/ai/tools/generate-image";
-import type { generateVideoTool as generateVideoToolFactory } from "@/lib/ai/tools/generate-video";
 import type { getWeather } from "@/lib/ai/tools/get-weather";
 import type {
   aristotleCheckJob,
   leanProof,
 } from "@/lib/ai/tools/lean-proof/lean-proof";
-import type { readDocument } from "@/lib/ai/tools/read-document";
 import type { retrieveUrl } from "@/lib/ai/tools/retrieve-url";
 import type { tavilyWebSearch } from "@/lib/ai/tools/web-search";
 import type { AppModelId } from "./app-models";
-import type { createCodeDocumentTool } from "./tools/documents/create-code-document";
-import type { createSheetDocumentTool } from "./tools/documents/create-sheet-document";
-import type { createTextDocumentTool } from "./tools/documents/create-text-document";
-import type { editCodeDocumentTool } from "./tools/documents/edit-code-document";
-import type { editSheetDocumentTool } from "./tools/documents/edit-sheet-document";
-import type { editTextDocumentTool } from "./tools/documents/edit-text-document";
+import type {
+  CreateDocumentToolInput,
+  DocumentToolResult,
+  EditDocumentToolInput,
+} from "./tools/documents/types";
 import type { ResearchUpdate } from "./tools/research-updates-schema";
 
 export const toolNameSchema = z.enum([
@@ -78,32 +73,64 @@ const messageMetadataSchema = z.object({
 
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
+type UIToolDef<Input, Output> = {
+  input: Input;
+  output: Output;
+};
+
 type weatherTool = InferUITool<typeof getWeather>;
-type createTextDocumentToolType = InferUITool<
-  ReturnType<typeof createTextDocumentTool>
+type createTextDocumentToolType = UIToolDef<
+  CreateDocumentToolInput,
+  DocumentToolResult
 >;
-type createCodeDocumentToolType = InferUITool<
-  ReturnType<typeof createCodeDocumentTool>
+type createCodeDocumentToolType = UIToolDef<
+  CreateDocumentToolInput,
+  DocumentToolResult
 >;
-type createSheetDocumentToolType = InferUITool<
-  ReturnType<typeof createSheetDocumentTool>
+type createSheetDocumentToolType = UIToolDef<
+  CreateDocumentToolInput,
+  DocumentToolResult
 >;
-type editTextDocumentToolType = InferUITool<
-  ReturnType<typeof editTextDocumentTool>
+type editTextDocumentToolType = UIToolDef<
+  EditDocumentToolInput,
+  DocumentToolResult
 >;
-type editCodeDocumentToolType = InferUITool<
-  ReturnType<typeof editCodeDocumentTool>
+type editCodeDocumentToolType = UIToolDef<
+  EditDocumentToolInput,
+  DocumentToolResult
 >;
-type editSheetDocumentToolType = InferUITool<
-  ReturnType<typeof editSheetDocumentTool>
+type editSheetDocumentToolType = UIToolDef<
+  EditDocumentToolInput,
+  DocumentToolResult
 >;
-type deepResearchTool = InferUITool<ReturnType<typeof deepResearch>>;
-type readDocumentTool = InferUITool<ReturnType<typeof readDocument>>;
-type generateImageTool = InferUITool<
-  ReturnType<typeof generateImageToolFactory>
+type deepResearchTool = UIToolDef<
+  Record<string, never>,
+  | ({ format: "report" } & DocumentToolResult)
+  | { answer: string; format: "clarifying_questions" }
+  | { answer: string; format: "problem" }
 >;
-type generateVideoTool = InferUITool<
-  ReturnType<typeof generateVideoToolFactory>
+type readDocumentTool = UIToolDef<
+  { documentId: string },
+  | {
+      content: string | null;
+      createdAt: Date;
+      documentId: string;
+      kind: "code" | "sheet" | "text";
+      title: string;
+    }
+  | { error: string }
+>;
+type generateImageTool = UIToolDef<
+  { prompt: string },
+  { imageUrl: string; prompt: string }
+>;
+type generateVideoTool = UIToolDef<
+  {
+    aspectRatio?: "16:9" | "9:16" | "1:1";
+    durationSeconds?: number;
+    prompt: string;
+  },
+  { prompt: string; videoUrl: string }
 >;
 type webSearchTool = InferUITool<ReturnType<typeof tavilyWebSearch>>;
 type codeExecutionTool = InferUITool<ReturnType<typeof codeExecution>>;

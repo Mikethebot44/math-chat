@@ -2,13 +2,17 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getDocumentById, saveDocument } from "@/lib/db/queries";
 import { textGuidelines } from "./text-guidelines";
-import type { DocumentToolContext, DocumentToolResult } from "./types";
+import type {
+  DocumentToolContext,
+  DocumentToolResult,
+  EditDocumentToolInput,
+} from "./types";
 
 export const editTextDocumentTool = ({
   session,
   messageId,
 }: DocumentToolContext) =>
-  tool({
+  tool<EditDocumentToolInput, DocumentToolResult>({
     description: `Edit an existing text document with markdown support.
 
 Use for editing:
@@ -28,7 +32,11 @@ Avoid:
       content: z.string().describe("The full updated markdown content"),
     }),
 
-    async execute({ documentId, title, content }): Promise<DocumentToolResult> {
+    async execute({
+      documentId,
+      title,
+      content,
+    }: EditDocumentToolInput): Promise<DocumentToolResult> {
       const document = await getDocumentById({ id: documentId });
 
       if (!document) {

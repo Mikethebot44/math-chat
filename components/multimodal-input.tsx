@@ -23,7 +23,6 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { ContextBar } from "@/components/context-bar";
-import { ContextUsageFromParent } from "@/components/context-usage";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
 import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
@@ -768,13 +767,13 @@ function PureMultimodalInput({
             attachmentsEnabled={attachmentsEnabled}
             fileInputRef={fileInputRef}
             onStop={handleStop}
-            parentMessageId={parentMessageId}
-            selectedModelId={selectedModelId}
             status={status}
             displayStatus={displayStatus}
             hasPendingAristotle={hasPendingAristotle}
             submission={submission}
             submitForm={submitForm}
+            parentMessageId={parentMessageId}
+            selectedModelId={selectedModelId}
           />
         </PromptInput>
       </div>
@@ -916,33 +915,33 @@ function PureAttachmentsButton({
 const AttachmentsButton = memo(PureAttachmentsButton);
 
 function PureChatInputBottomControls({
-  selectedModelId,
   fileInputRef,
   status,
   displayStatus,
   hasPendingAristotle,
   submitForm,
   submission,
-  parentMessageId,
   acceptAll,
   acceptImages,
   acceptFiles,
   attachmentsEnabled,
   onStop,
+  parentMessageId,
+  selectedModelId,
 }: {
-  selectedModelId: AppModelId;
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
   displayStatus: UseChatHelpers<ChatMessage>["status"];
   hasPendingAristotle: boolean;
   submitForm: () => void;
   submission: { enabled: boolean; message?: string };
-  parentMessageId: string | null;
   acceptAll: string;
   acceptImages: string;
   acceptFiles: string;
   attachmentsEnabled: boolean;
   onStop: () => void;
+  parentMessageId: string | null;
+  selectedModelId: string;
 }) {
   return (
     <PromptInputFooter className="flex w-full min-w-0 flex-row items-center justify-between @[500px]:gap-2 gap-1 border-t px-1 py-1 group-has-[>input]/input-group:pb-1 [.border-t]:pt-1">

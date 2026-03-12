@@ -78,49 +78,70 @@ export const project = pgTable(
 
 export type Project = InferSelectModel<typeof project>;
 
-export const chat = pgTable("Chat", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  createdAt: timestamp("createdAt").notNull(),
-  updatedAt: timestamp("updatedAt")
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-  title: text("title").notNull(),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id),
-  visibility: varchar("visibility", { enum: ["public", "private"] })
-    .notNull()
-    .default("private"),
-  isPinned: boolean("isPinned").notNull().default(false),
-  projectId: uuid("projectId").references(() => project.id, {
-    onDelete: "set null",
-  }),
-});
+export const chat = pgTable(
+  "Chat",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    createdAt: timestamp("createdAt").notNull(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    title: text("title").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id),
+    visibility: varchar("visibility", { enum: ["public", "private"] })
+      .notNull()
+      .default("private"),
+    isPinned: boolean("isPinned").notNull().default(false),
+    projectId: uuid("projectId").references(() => project.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => ({
+    Chat_user_id_updated_at_idx: index("Chat_user_id_updated_at_idx").on(
+      t.userId,
+      t.updatedAt
+    ),
+    Chat_user_id_project_id_updated_at_idx: index(
+      "Chat_user_id_project_id_updated_at_idx"
+    ).on(t.userId, t.projectId, t.updatedAt),
+  })
+);
 
 export type Chat = InferSelectModel<typeof chat>;
 
-export const message = pgTable("Message", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
-    .notNull()
-    .references(() => chat.id, {
-      onDelete: "cascade",
-    }),
-  parentMessageId: uuid("parentMessageId"),
-  role: varchar("role").notNull(),
-  // parts column removed - parts are now stored in Part table
-  attachments: json("attachments").notNull(),
-  createdAt: timestamp("createdAt").notNull(),
-  annotations: json("annotations"),
-  selectedModel: varchar("selectedModel", { length: 256 }).default(""),
-  selectedTool: varchar("selectedTool", { length: 256 }).default(""),
-  lastContext: json("lastContext"),
-  activeStreamId: varchar("activeStreamId", { length: 64 }),
-  activeRunId: uuid("activeRunId"),
-  /** Timestamp when this message's stream was canceled by the user. Null means not canceled. */
-  canceledAt: timestamp("canceledAt"),
-});
+export const message = pgTable(
+  "Message",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    chatId: uuid("chatId")
+      .notNull()
+      .references(() => chat.id, {
+        onDelete: "cascade",
+      }),
+    parentMessageId: uuid("parentMessageId"),
+    role: varchar("role").notNull(),
+    // parts column removed - parts are now stored in Part table
+    attachments: json("attachments").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+    annotations: json("annotations"),
+    selectedModel: varchar("selectedModel", { length: 256 }).default(""),
+    selectedTool: varchar("selectedTool", { length: 256 }).default(""),
+    lastContext: json("lastContext"),
+    activeStreamId: varchar("activeStreamId", { length: 64 }),
+    activeRunId: uuid("activeRunId"),
+    /** Timestamp when this message's stream was canceled by the user. Null means not canceled. */
+    canceledAt: timestamp("canceledAt"),
+  },
+  (t) => ({
+    Message_chat_id_created_at_idx: index("Message_chat_id_created_at_idx").on(
+      t.chatId,
+      t.createdAt
+    ),
+  })
+);
 
 export type DBMessage = InferSelectModel<typeof message>;
 

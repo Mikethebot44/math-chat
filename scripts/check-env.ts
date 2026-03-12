@@ -4,7 +4,7 @@
  * Validates that enabled features in config have their required env vars.
  * Run via `bun run check-env` or automatically in prebuild.
  */
-import "dotenv/config";
+import { loadEnvConfig } from "@next/env";
 import type { GatewayType } from "../lib/ai/gateways/registry";
 import { generatedForGateway } from "../lib/ai/models.generated";
 import { config } from "../lib/config";
@@ -16,6 +16,9 @@ import {
   getMissingRequirement,
   isRequirementSatisfied,
 } from "../lib/config-requirements";
+
+// Match Next.js env resolution so `bun run check-env` sees `.env.local`.
+loadEnvConfig(process.cwd());
 
 interface ValidationError {
   feature: string;

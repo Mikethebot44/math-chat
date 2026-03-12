@@ -1,4 +1,10 @@
-import { generateText, type ModelMessage, Output, streamText } from "ai";
+import {
+  generateText,
+  type ModelMessage,
+  Output,
+  streamText,
+  type ToolSet,
+} from "ai";
 import type { z } from "zod";
 import type { AppModelId, ModelId } from "@/lib/ai/app-models";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -324,7 +330,7 @@ ${truncatedReportPrompt}
 To write the report, call the createTextDocument tool with:
 - title: "${reportTitle}"
 - content: the full markdown content of your report`,
-    tools: { createTextDocument: reportTool },
+    tools: { createTextDocument: reportTool } as ToolSet,
     maxOutputTokens: config.final_report_model_max_tokens,
     experimental_telemetry: createTelemetry("finalReportGeneration", input),
     abortSignal,

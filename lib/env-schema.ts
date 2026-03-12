@@ -64,6 +64,19 @@ export const serverEnvSchema = {
     .optional()
     .describe("API key for OpenAI-compatible provider"),
   OPENAI_API_KEY: z.string().optional().describe("OpenAI API key"),
+  DEEPINFRA_API_KEY: z.string().optional().describe("DeepInfra API key"),
+  MATH_SEARCH_VECTOR_MODEL: z
+    .string()
+    .optional()
+    .describe(
+      "Embedding model used to query Pinecone math-search indexes; must match the model used during indexing"
+    ),
+  MATH_SEARCH_RERANK_MODEL: z
+    .string()
+    .optional()
+    .describe(
+      "Embedding model used to rerank math-search candidates after vector retrieval"
+    ),
   E2B_API_KEY: z.string().optional().describe("E2B API key"),
   E2B_CHAT_TEMPLATE_ID: z
     .string()

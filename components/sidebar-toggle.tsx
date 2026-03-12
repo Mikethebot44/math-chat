@@ -12,6 +12,7 @@ import { Button } from "./ui/button";
 
 export function SidebarToggle({
   className: _className,
+  children,
 }: ComponentProps<typeof SidebarTrigger>) {
   const { toggleSidebar } = useSidebar();
 
@@ -19,7 +20,7 @@ export function SidebarToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button onClick={toggleSidebar} size="icon" variant="ghost">
-          <PanelLeft size={16} />
+          {children ?? <PanelLeft size={16} />}
         </Button>
       </TooltipTrigger>
       <TooltipContent align="start">Toggle Sidebar</TooltipContent>

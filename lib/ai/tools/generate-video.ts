@@ -13,6 +13,17 @@ interface GenerateVideoProps {
   selectedModel?: string;
 }
 
+interface GenerateVideoInput {
+  aspectRatio?: "16:9" | "9:16" | "1:1";
+  durationSeconds?: number;
+  prompt: string;
+}
+
+interface GenerateVideoOutput {
+  prompt: string;
+  videoUrl: string;
+}
+
 const log = createModuleLogger("ai.tools.generate-video");
 const DEFAULT_ASPECT_RATIO = "16:9";
 const DEFAULT_DURATION_SECONDS = 5;
@@ -55,7 +66,7 @@ export const generateVideoTool = ({
   selectedModel,
   costAccumulator,
 }: GenerateVideoProps = {}) =>
-  tool({
+  tool<GenerateVideoInput, GenerateVideoOutput>({
     description:
       "Generate a short video clip from a text prompt. Use this when the user asks to create, make, or generate a video.",
     inputSchema: z.object({
@@ -74,7 +85,11 @@ export const generateVideoTool = ({
         .optional()
         .describe("Optional video duration in seconds. Defaults to 5."),
     }),
-    execute: async ({ prompt, aspectRatio, durationSeconds }) => {
+    execute: async ({
+      prompt,
+      aspectRatio,
+      durationSeconds,
+    }: GenerateVideoInput): Promise<GenerateVideoOutput> => {
       const startMs = Date.now();
       const finalAspectRatio = aspectRatio ?? DEFAULT_ASPECT_RATIO;
       const finalDurationSeconds = durationSeconds ?? DEFAULT_DURATION_SECONDS;

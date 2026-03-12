@@ -1,4 +1,4 @@
-import { hasToolCall, stepCountIs, ToolLoopAgent, tool } from "ai";
+import { hasToolCall, stepCountIs, ToolLoopAgent, tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { AppModelId, ModelId } from "@/lib/ai/app-models";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -52,7 +52,7 @@ export async function runSupervisor(
     tools: {
       conductResearch: conductResearchTool,
       researchComplete: researchCompleteTool,
-    },
+    } as ToolSet,
     maxOutputTokens: config.research_model_max_tokens,
     stopWhen: [hasToolCall("researchComplete"), stepCountIs(maxSteps)],
     experimental_telemetry: createTelemetry("supervisor", options),

@@ -16,6 +16,18 @@ import type {
   ToolName,
   ToolOutput,
 } from "@/lib/ai/types";
+import {
+  getCachedChatById,
+  getCachedChatMessages,
+  getCachedChatsByUserId,
+  invalidateChatCache,
+  invalidateChatMessagesCache,
+  invalidateChatReadCaches,
+  invalidateUserChatListCaches,
+  setCachedChat,
+  setCachedChatMessages,
+  setCachedChatsByUserId,
+} from "@/lib/db/chat-cache";
 import { createModuleLogger } from "@/lib/logger";
 import { chatMessageToDbMessage } from "@/lib/message-conversion";
 
@@ -64,14 +76,25 @@ export async function saveChat({
   projectId?: string;
 }) {
   try {
-    return await db.insert(chat).values({
+    const now = new Date();
+    const newChat = {
       id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
       userId,
       title,
+      visibility: "private" as const,
+      isPinned: false,
       projectId: projectId ?? null,
-    });
+    };
+
+    const result = await db.insert(chat).values(newChat);
+    await Promise.all([
+      setCachedChat(newChat),
+      invalidateUserChatListCaches(userId),
+    ]);
+
+    return result;
   } catch (error) {
     console.error("Failed to save chat in database");
     throw error;
@@ -80,6 +103,8 @@ export async function saveChat({
 
 export async function deleteChatById({ id }: { id: string }) {
   try {
+    const selectedChat = await getChatById({ id });
+
     // Get all messages for this chat to clean up their attachments
     const messagesToDelete = await db
       .select()
@@ -91,7 +116,13 @@ export async function deleteChatById({ id }: { id: string }) {
       await deleteAttachmentsFromMessages(messagesToDelete);
     }
 
-    return await db.delete(chat).where(eq(chat.id, id));
+    const result = await db.delete(chat).where(eq(chat.id, id));
+    await invalidateChatReadCaches({
+      chatId: id,
+      userId: selectedChat?.userId,
+    });
+
+    return result;
   } catch (error) {
     console.error("Failed to delete chat by id from database");
     throw error;
@@ -114,6 +145,19 @@ export async function getChatsByUserId({
   });
 
   try {
+    const cachedChats = await getCachedChatsByUserId({
+      userId: id,
+      projectId,
+    });
+    if (cachedChats) {
+      console.log("[getChatsByUserId] Cache hit", {
+        count: cachedChats.length,
+        userId: id,
+        projectId,
+      });
+      return cachedChats;
+    }
+
     let conditions: SQL<unknown> | undefined = eq(chat.userId, id);
     if (projectId === null) {
       // Filter for chats without a project
@@ -147,6 +191,12 @@ export async function getChatsByUserId({
             updatedAtType: typeof result[0].updatedAt,
           }
         : null,
+    });
+
+    await setCachedChatsByUserId({
+      userId: id,
+      projectId,
+      chats: result,
     });
 
     return result;
@@ -297,7 +347,15 @@ async function _tryGetChatById({ id }: { id: string }) {
 
 export async function getChatById({ id }: { id: string }) {
   try {
+    const cachedChat = await getCachedChatById(id);
+    if (cachedChat) {
+      return cachedChat;
+    }
+
     const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
+    if (selectedChat) {
+      await setCachedChat(selectedChat);
+    }
     return selectedChat;
   } catch (error) {
     console.error("Failed to get chat by id from database");
@@ -315,7 +373,7 @@ export async function saveMessage({
   message: ChatMessage;
 }) {
   try {
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Convert ChatMessage to DBMessage (without parts)
       const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
       dbMessage.id = id;
@@ -334,6 +392,10 @@ export async function saveMessage({
 
       return;
     });
+
+    const ownerId = await getChatOwnerIdByChatId(chatId);
+    await invalidateChatReadCaches({ chatId, userId: ownerId });
+    return result;
   } catch (error) {
     logger.error({ error, chatId, id }, "saveMessage failed");
     throw error;
@@ -353,7 +415,7 @@ export async function saveChatMessages({
     if (messages.length === 0) {
       return;
     }
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Insert messages (without parts - parts are stored in Part table)
       const dbMessages = messages.map(({ id, chatId, message: msg }) => {
         const dbMsg = chatMessageToDbMessage(msg, chatId);
@@ -380,6 +442,19 @@ export async function saveChatMessages({
 
       return;
     });
+
+    const uniqueChatIds = [...new Set(messages.map(({ chatId }) => chatId))];
+    const ownerIds = await getChatOwnerIdsByChatIds(uniqueChatIds);
+    await Promise.all(
+      uniqueChatIds.map((chatId) =>
+        invalidateChatReadCaches({
+          chatId,
+          userId: ownerIds.get(chatId),
+        })
+      )
+    );
+
+    return result;
   } catch (error) {
     logger.error(
       { error, messageIds: messages.map((m) => m.id) },
@@ -399,7 +474,7 @@ export async function updateMessage({
   message: ChatMessage;
 }) {
   try {
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Convert ChatMessage to DBMessage (without parts)
       const dbMessage = chatMessageToDbMessage(chatMessage, chatId);
       dbMessage.id = id;
@@ -430,20 +505,37 @@ export async function updateMessage({
 
       return;
     });
+
+    await invalidateChatMessagesCache(chatId);
+    return result;
   } catch (error) {
     logger.error({ error, messageId: id, chatId }, "updateMessage failed");
     throw error;
   }
 }
 
-export function updateMessageActiveStreamId({
+export async function updateMessageActiveStreamId({
   id,
   activeStreamId,
 }: {
   id: string;
   activeStreamId: string | null;
 }) {
-  return db.update(message).set({ activeStreamId }).where(eq(message.id, id));
+  const [chatRow] = await db
+    .select({ chatId: message.chatId })
+    .from(message)
+    .where(eq(message.id, id));
+
+  const result = await db
+    .update(message)
+    .set({ activeStreamId })
+    .where(eq(message.id, id));
+
+  if (chatRow?.chatId) {
+    await invalidateChatMessagesCache(chatRow.chatId);
+  }
+
+  return result;
 }
 
 export async function getAllMessagesByChatId({
@@ -452,6 +544,11 @@ export async function getAllMessagesByChatId({
   chatId: string;
 }): Promise<ChatMessage[]> {
   try {
+    const cachedMessages = await getCachedChatMessages(chatId);
+    if (cachedMessages) {
+      return cachedMessages;
+    }
+
     const messages = await db
       .select()
       .from(message)
@@ -459,6 +556,7 @@ export async function getAllMessagesByChatId({
       .orderBy(asc(message.createdAt));
 
     if (messages.length === 0) {
+      await setCachedChatMessages(chatId, []);
       return [];
     }
 
@@ -479,7 +577,7 @@ export async function getAllMessagesByChatId({
     }
 
     // Reconstruct ChatMessage objects with parts from Part table
-    return messages.map((msg) => {
+    const chatMessages = messages.map((msg) => {
       const dbParts = partsByMessageId.get(msg.id);
       const parts =
         dbParts && dbParts.length > 0 ? mapDBPartsToUIParts(dbParts) : [];
@@ -501,6 +599,9 @@ export async function getAllMessagesByChatId({
         },
       };
     });
+
+    await setCachedChatMessages(chatId, chatMessages);
+    return chatMessages;
   } catch (error) {
     console.error("Failed to get all messages by chat ID", error);
     throw error;
@@ -898,7 +999,7 @@ export async function deleteMessagesByChatIdAfterMessageId({
       await deleteAttachmentsFromMessages(messagesToDelete);
 
       // Delete the messages (votes will be deleted automatically via CASCADE)
-      return await db
+      const result = await db
         .delete(message)
         .where(
           and(
@@ -906,6 +1007,10 @@ export async function deleteMessagesByChatIdAfterMessageId({
             inArray(message.id, messageIdsToDelete)
           )
         );
+
+      const ownerId = await getChatOwnerIdByChatId(chatId);
+      await invalidateChatReadCaches({ chatId, userId: ownerId });
+      return result;
     }
   } catch (error) {
     console.error(
@@ -923,7 +1028,13 @@ export async function updateChatVisiblityById({
   visibility: "private" | "public";
 }) {
   try {
-    return await db.update(chat).set({ visibility }).where(eq(chat.id, chatId));
+    const result = await db
+      .update(chat)
+      .set({ visibility })
+      .where(eq(chat.id, chatId));
+    const ownerId = await getChatOwnerIdByChatId(chatId);
+    await invalidateChatReadCaches({ chatId, userId: ownerId });
+    return result;
   } catch (error) {
     console.error("Failed to update chat visibility in database");
     throw error;
@@ -938,12 +1049,15 @@ export async function updateChatTitleById({
   title: string;
 }) {
   try {
-    return await db
+    const result = await db
       .update(chat)
       .set({
         title,
       })
       .where(eq(chat.id, chatId));
+    const ownerId = await getChatOwnerIdByChatId(chatId);
+    await invalidateChatReadCaches({ chatId, userId: ownerId });
+    return result;
   } catch (error) {
     console.error("Failed to update chat title by id from database");
     throw error;
@@ -958,12 +1072,15 @@ export async function updateChatIsPinnedById({
   isPinned: boolean;
 }) {
   try {
-    return await db
+    const result = await db
       .update(chat)
       .set({
         isPinned,
       })
       .where(eq(chat.id, chatId));
+    const ownerId = await getChatOwnerIdByChatId(chatId);
+    await invalidateChatReadCaches({ chatId, userId: ownerId });
+    return result;
   } catch (error) {
     console.error("Failed to update chat isPinned by id from database");
     throw error;
@@ -995,10 +1112,19 @@ export async function updateMessageCanceledAt({
   canceledAt: Date | null;
 }) {
   try {
-    return await db
+    const [chatRow] = await db
+      .select({ chatId: message.chatId })
+      .from(message)
+      .where(eq(message.id, messageId));
+
+    const result = await db
       .update(message)
       .set({ canceledAt })
       .where(eq(message.id, messageId));
+    if (chatRow?.chatId) {
+      await invalidateChatMessagesCache(chatRow.chatId);
+    }
+    return result;
   } catch (error) {
     logger.error({ error, messageId }, "updateMessageCanceledAt failed");
     throw error;
@@ -1007,16 +1133,41 @@ export async function updateMessageCanceledAt({
 
 async function updateChatUpdatedAt({ chatId }: { chatId: string }) {
   try {
-    return await db
+    const result = await db
       .update(chat)
       .set({
         updatedAt: new Date(),
       })
       .where(eq(chat.id, chatId));
+    await invalidateChatCache(chatId);
+    return result;
   } catch (error) {
     console.error("Failed to update chat updatedAt by id from database");
     throw error;
   }
+}
+
+async function getChatOwnerIdByChatId(chatId: string): Promise<string | null> {
+  const ownerIds = await getChatOwnerIdsByChatIds([chatId]);
+  return ownerIds.get(chatId) ?? null;
+}
+
+async function getChatOwnerIdsByChatIds(
+  chatIds: string[]
+): Promise<Map<string, string>> {
+  if (chatIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      id: chat.id,
+      userId: chat.userId,
+    })
+    .from(chat)
+    .where(inArray(chat.id, chatIds));
+
+  return new Map(rows.map((row) => [row.id, row.userId]));
 }
 
 export async function getUserById({

@@ -51,7 +51,8 @@ export async function streamFollowupSuggestions({
       data: {
         suggestions:
           chunk.suggestions?.filter(
-            (suggestion): suggestion is string => suggestion !== undefined
+            (suggestion: string | undefined): suggestion is string =>
+              suggestion !== undefined
           ) ?? [],
       },
     });

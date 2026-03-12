@@ -15,6 +15,15 @@ export type DocumentToolResult =
       error: string;
     };
 
+export interface CreateDocumentToolInput {
+  content: string;
+  title: string;
+}
+
+export interface EditDocumentToolInput extends CreateDocumentToolInput {
+  documentId: string;
+}
+
 export interface DocumentToolContext {
   costAccumulator?: CostAccumulator;
   // dataStream: StreamWriter;
