@@ -13,12 +13,10 @@ export function SearchMathButton() {
       <SidebarMenuButton
         className="w-full justify-start"
         onClick={() => setOpen(true)}
-        tooltip="Search math"
+        tooltip="Search papers"
       >
         <SquareFunctionIcon className="h-4 w-4" />
-        <span className="group-data-[collapsible=icon]:hidden">
-          Search Math
-        </span>
+        <span>Search Papers</span>
       </SidebarMenuButton>
 
       {open && <SearchMathDialog onOpenChange={setOpen} open={open} />}

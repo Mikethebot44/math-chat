@@ -28,7 +28,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_WIDTH_ICON = "3rem";
+const SIDEBAR_WIDTH_ICON = "3.3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 type SidebarContextProps = {
@@ -243,6 +243,7 @@ function Sidebar({
     <div
       className="group peer hidden text-sidebar-foreground md:block"
       data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-menu-text={state === "expanded" ? "visible" : "hidden"}
       data-side={side}
       data-slot="sidebar"
       data-state={state}
@@ -513,7 +514,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding,gap] duration-200 ease-linear hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! group-data-[menu-text=hidden]:gap-0 [&>span:not(.sr-only)]:min-w-0 [&>span:not(.sr-only)]:max-w-[12rem] [&>span:not(.sr-only)]:overflow-hidden [&>span:not(.sr-only)]:whitespace-nowrap [&>span:not(.sr-only)]:transition-[opacity,max-width,margin,transform] [&>span:not(.sr-only)]:duration-150 [&>span:not(.sr-only)]:ease-linear group-data-[menu-text=hidden]:[&>span:not(.sr-only)]:max-w-0 group-data-[menu-text=hidden]:[&>span:not(.sr-only)]:opacity-0 group-data-[menu-text=hidden]:[&>span:not(.sr-only)]:-translate-x-1 group-data-[menu-text=hidden]:[&>span:last-child:not(.sr-only)]:ml-0 [&>div]:min-w-0 [&>div]:max-w-[12rem] [&>div]:overflow-hidden [&>div]:transition-[opacity,max-width,margin,transform] [&>div]:duration-150 [&>div]:ease-linear group-data-[menu-text=hidden]:[&>div]:max-w-0 group-data-[menu-text=hidden]:[&>div]:opacity-0 group-data-[menu-text=hidden]:[&>div]:-translate-x-1 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg:last-child]:transition-[opacity,margin,transform] [&>svg:last-child]:duration-150 [&>svg:last-child]:ease-linear group-data-[menu-text=hidden]:[&>svg:last-child]:ml-0 group-data-[menu-text=hidden]:[&>svg:last-child]:scale-75 group-data-[menu-text=hidden]:[&>svg:last-child]:opacity-0",
   {
     variants: {
       variant: {

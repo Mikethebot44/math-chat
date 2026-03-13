@@ -1,296 +1,197 @@
 import "server-only";
 
-import type { MathSearchResult } from "./types";
+import { type MathSearchResult, mathSearchResultSchema } from "./types";
 
-type SourceType = MathSearchResult["source"];
-
-interface PineconeMatch {
-  id: string;
-  metadata?: Record<string, unknown>;
-  score?: number;
+interface ExaSearchResponse {
+  results?: ExaSearchResult[];
 }
 
-interface SearchCandidate {
-  id: string;
-  metadata: Record<string, unknown>;
-  source: SourceType;
-  vectorScore: number;
+interface ExaSearchResult {
+  abstract?: string;
+  author?: unknown;
+  authors?: unknown;
+  highlights?: unknown;
+  id?: string;
+  publishedDate?: string | null;
+  summary?: string;
+  text?: string;
+  title?: string;
+  url?: string;
 }
 
-interface RankedResult extends SearchCandidate {
-  rerankScore: number;
-}
+const EXA_SEARCH_ENDPOINT = "https://api.exa.ai/search";
+const MAX_RESULTS = 8;
+const ABSTRACT_PATTERN = /(?:^|\n)\s*abstract[:\s-]+([\s\S]{80,2400})/i;
+const AUTHOR_SPLIT_PATTERN = /,| and /i;
+const PARAGRAPH_SPLIT_PATTERN = /\n\s*\n/;
 
-const vectorSearchEmbeddingModel =
-  process.env.MATH_SEARCH_VECTOR_MODEL ?? "Qwen/Qwen3-Embedding-4B";
+const decodeHtmlEntities = (text: string): string =>
+  text
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 
-const rerankEmbeddingModel =
-  process.env.MATH_SEARCH_RERANK_MODEL ?? "Qwen/Qwen3-Embedding-8B";
+const normalizeWhitespace = (text: string): string =>
+  text.replace(/\s+/g, " ").trim();
 
-const vectorDatabases: Array<{ host: string | undefined; source: SourceType }> =
-  [
-    { host: process.env.PINECONE_PAPERS_HOST, source: "paper" },
-    { host: process.env.PINECONE_THEOREMS_HOST, source: "theorem" },
-  ];
+const sanitizeText = (text: string): string =>
+  normalizeWhitespace(decodeHtmlEntities(text.replace(/<[^>]+>/g, " ")));
 
-const embedWithDeepInfra = async (
-  input: string | string[],
-  model: string,
-  dimensions?: number
-): Promise<number[][]> => {
-  const response = await fetch(
-    "https://api.deepinfra.com/v1/openai/embeddings",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPINFRA_API_KEY}`,
-      },
-      body: JSON.stringify({
-        ...(dimensions ? { dimensions } : {}),
-        input,
-        model,
-      }),
-    }
-  );
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    console.error("[math-search] DeepInfra embedding request failed", {
-      bodyPreview: responseText.slice(0, 500),
-      inputCount: Array.isArray(input) ? input.length : 1,
-      inputPreview: Array.isArray(input)
-        ? input.slice(0, 2).map((item) => item.slice(0, 120))
-        : input.slice(0, 120),
-      dimensions,
-      model,
-      status: response.status,
-    });
-    throw new Error(`Embedding request failed (${response.status})`);
+const truncateText = (text: string, maxLength: number): string => {
+  if (text.length <= maxLength) {
+    return text;
   }
 
-  const payload = JSON.parse(responseText) as {
-    data: Array<{ embedding: number[] }>;
-  };
-
-  return payload.data.map((item) => item.embedding);
+  return `${text.slice(0, maxLength).trimEnd()}...`;
 };
 
-const describePineconeIndex = async (
-  host: string
-): Promise<{ dimension?: number }> => {
-  const response = await fetch(`${host}/describe_index_stats`, {
-    method: "POST",
-    headers: {
-      "Api-Key": process.env.PINECONE_API_KEY ?? "",
-      "Content-Type": "application/json",
-      "X-Pinecone-API-Version": "2024-07",
-    },
-    body: JSON.stringify({}),
-  });
-
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      `Pinecone describe_index_stats failed (${response.status}): ${responseText.slice(0, 300)}`
-    );
+const getString = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
   }
 
-  return JSON.parse(responseText) as { dimension?: number };
+  const sanitized = sanitizeText(value);
+  return sanitized.length > 0 ? sanitized : null;
 };
 
-const queryPinecone = async (
-  host: string,
-  vector: number[],
-  topK = 12,
-  source?: SourceType
-): Promise<PineconeMatch[]> => {
-  const response = await fetch(`${host}/query`, {
-    method: "POST",
-    headers: {
-      "Api-Key": process.env.PINECONE_API_KEY ?? "",
-      "Content-Type": "application/json",
-      "X-Pinecone-API-Version": "2024-07",
-    },
-    body: JSON.stringify({
-      vector,
-      topK,
-      includeMetadata: true,
-      includeValues: false,
-    }),
-  });
+const normalizeAuthors = (authors: unknown, author: unknown): string[] => {
+  const source = authors ?? author;
 
-  const responseText = await response.text();
-  if (!response.ok) {
-    console.error("[math-search] Pinecone query failed", {
-      bodyPreview: responseText.slice(0, 500),
-      host,
-      source,
-      status: response.status,
-      topK,
-      vectorLength: vector.length,
-    });
-    throw new Error(
-      `Pinecone query failed (${response.status}): ${responseText.slice(0, 300)}`
-    );
+  if (typeof source === "string") {
+    return source
+      .split(AUTHOR_SPLIT_PATTERN)
+      .map((name) => name.trim())
+      .filter(Boolean);
   }
 
-  const payload = JSON.parse(responseText) as { matches?: PineconeMatch[] };
-  return payload.matches ?? [];
-};
-
-const toDocumentText = (metadata: Record<string, unknown>): string => {
-  const preferredKeys = [
-    "title",
-    "abstract",
-    "text",
-    "content",
-    "body",
-    "question",
-    "answer",
-    "summary",
-  ];
-
-  const orderedValues = preferredKeys
-    .map((key) => metadata[key])
-    .filter(
-      (value) => typeof value === "string" && value.trim().length > 0
-    ) as string[];
-
-  if (orderedValues.length > 0) {
-    return orderedValues.join("\n\n").slice(0, 4000);
-  }
-
-  return JSON.stringify(metadata).slice(0, 4000);
-};
-
-const cosineSimilarity = (a: number[], b: number[]): number => {
-  if (a.length !== b.length || a.length === 0) {
-    return -1;
-  }
-
-  let dot = 0;
-  let aNorm = 0;
-  let bNorm = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    aNorm += a[i] * a[i];
-    bNorm += b[i] * b[i];
-  }
-
-  const norm = Math.sqrt(aNorm) * Math.sqrt(bNorm);
-  return norm === 0 ? -1 : dot / norm;
-};
-
-export const isMathSearchConfigured = (): boolean =>
-  !!(
-    process.env.DEEPINFRA_API_KEY &&
-    process.env.PINECONE_API_KEY &&
-    vectorDatabases.every((db) => db.host)
-  );
-
-export async function searchMath(query: string): Promise<MathSearchResult[]> {
-  if (!isMathSearchConfigured()) {
-    throw new Error("Math search is not configured on the server.");
-  }
-
-  const indexStats = await Promise.all(
-    vectorDatabases.map(async (db) => ({
-      source: db.source,
-      stats: await describePineconeIndex(db.host ?? ""),
-    }))
-  );
-
-  const vectorDimension = indexStats.find(
-    ({ stats }) => typeof stats.dimension === "number"
-  )?.stats.dimension;
-
-  console.info("[math-search] resolved vector embedding settings", {
-    indexDimensions: indexStats.map(({ source, stats }) => ({
-      dimension: stats.dimension,
-      source,
-    })),
-    vectorDimension,
-    vectorSearchEmbeddingModel,
-  });
-
-  const inconsistentDimensions = indexStats.some(
-    ({ stats }) =>
-      typeof stats.dimension === "number" &&
-      typeof vectorDimension === "number" &&
-      stats.dimension !== vectorDimension
-  );
-
-  if (inconsistentDimensions) {
-    throw new Error(
-      "Math search indexes do not share the same vector dimension. All Pinecone indexes queried by math search must use the same embedding size."
-    );
-  }
-
-  const [queryEmbedding4B] = await embedWithDeepInfra(
-    query,
-    vectorSearchEmbeddingModel,
-    vectorDimension
-  );
-
-  const dimensionMismatch = indexStats.find(
-    ({ stats }) =>
-      stats.dimension && stats.dimension !== queryEmbedding4B.length
-  );
-
-  if (dimensionMismatch) {
-    throw new Error(
-      `Math search embedding dimension mismatch: ${vectorSearchEmbeddingModel} returned ${queryEmbedding4B.length} dimensions, but the ${dimensionMismatch.source} index expects ${dimensionMismatch.stats.dimension}.`
-    );
-  }
-
-  const [queryEmbedding8B] = await embedWithDeepInfra(
-    query,
-    rerankEmbeddingModel
-  );
-
-  const searchResponses = await Promise.all(
-    vectorDatabases.map(async (db) => {
-      const matches = await queryPinecone(
-        db.host ?? "",
-        queryEmbedding4B,
-        12,
-        db.source
-      );
-      return matches.map(
-        (match): SearchCandidate => ({
-          id: match.id,
-          metadata: match.metadata ?? {},
-          source: db.source,
-          vectorScore: match.score ?? 0,
-        })
-      );
-    })
-  );
-
-  const candidates = searchResponses.flat();
-
-  if (candidates.length === 0) {
+  if (!Array.isArray(source)) {
     return [];
   }
 
-  const docs = candidates.map((item) => toDocumentText(item.metadata));
-  const docEmbeddings8B = await embedWithDeepInfra(docs, rerankEmbeddingModel);
-
-  return candidates
-    .map(
-      (candidate, idx): RankedResult => ({
-        ...candidate,
-        rerankScore: cosineSimilarity(queryEmbedding8B, docEmbeddings8B[idx]),
-      })
-    )
-    .sort((a, b) => {
-      if (b.rerankScore !== a.rerankScore) {
-        return b.rerankScore - a.rerankScore;
+  return source
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry.trim();
       }
 
-      return b.vectorScore - a.vectorScore;
+      if (
+        entry &&
+        typeof entry === "object" &&
+        "name" in entry &&
+        typeof entry.name === "string"
+      ) {
+        return entry.name.trim();
+      }
+
+      return null;
     })
-    .slice(0, 8);
+    .filter((name): name is string => Boolean(name));
+};
+
+const getHighlightsText = (highlights: unknown): string | null => {
+  if (!Array.isArray(highlights)) {
+    return null;
+  }
+
+  const sanitizedHighlights = highlights
+    .filter((highlight): highlight is string => typeof highlight === "string")
+    .map((highlight) => sanitizeText(highlight))
+    .filter(Boolean);
+
+  if (sanitizedHighlights.length === 0) {
+    return null;
+  }
+
+  return truncateText(sanitizedHighlights.join(" "), 420);
+};
+
+const extractAbstractFromText = (text: string): string | null => {
+  const normalizedText = decodeHtmlEntities(text.replace(/\r/g, ""));
+  const abstractMatch = normalizedText.match(ABSTRACT_PATTERN);
+  if (abstractMatch?.[1]) {
+    return truncateText(sanitizeText(abstractMatch[1]), 420);
+  }
+
+  const paragraphs = normalizedText
+    .split(PARAGRAPH_SPLIT_PATTERN)
+    .map((paragraph) => sanitizeText(paragraph))
+    .filter(
+      (paragraph) =>
+        paragraph.length > 120 && !paragraph.toLowerCase().startsWith("title:")
+    );
+
+  return paragraphs[0] ? truncateText(paragraphs[0], 420) : null;
+};
+
+const toMathSearchResult = (
+  result: ExaSearchResult
+): MathSearchResult | null => {
+  const url = getString(result.url);
+  if (!url) {
+    return null;
+  }
+
+  const parsedResult = mathSearchResultSchema.safeParse({
+    abstract:
+      getString(result.abstract) ??
+      getString(result.summary) ??
+      getHighlightsText(result.highlights) ??
+      (result.text ? extractAbstractFromText(result.text) : null) ??
+      "No abstract available.",
+    authors: normalizeAuthors(result.authors, result.author),
+    id: getString(result.id) ?? url,
+    publishedDate: getString(result.publishedDate),
+    source: "paper",
+    title: getString(result.title) ?? "Untitled paper",
+    url,
+  });
+
+  return parsedResult.success ? parsedResult.data : null;
+};
+
+export const isMathSearchConfigured = (): boolean =>
+  !!process.env.EXA_API_KEY?.trim();
+
+export async function searchMath(query: string): Promise<MathSearchResult[]> {
+  if (!isMathSearchConfigured()) {
+    throw new Error(
+      "Math paper search is not configured on the server. Set EXA_API_KEY."
+    );
+  }
+
+  const response = await fetch(EXA_SEARCH_ENDPOINT, {
+    body: JSON.stringify({
+      category: "research paper",
+      contents: {
+        text: true,
+      },
+      numResults: MAX_RESULTS,
+      query,
+      type: "auto",
+    }),
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.EXA_API_KEY ?? "",
+    },
+    method: "POST",
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    console.error("[math-search] Exa search failed", {
+      bodyPreview: responseText.slice(0, 500),
+      query,
+      status: response.status,
+    });
+    throw new Error(`Exa paper search failed (${response.status}).`);
+  }
+
+  const payload = JSON.parse(responseText) as ExaSearchResponse;
+
+  return (payload.results ?? [])
+    .map((result) => toMathSearchResult(result))
+    .filter((result): result is MathSearchResult => result !== null);
 }

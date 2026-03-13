@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { ALWAYS_ENABLED_MATH_AGENT_TOOLS } from "./math-agent";
 import type { ChatTools, ToolName } from "./types";
 
 /**
@@ -9,8 +10,8 @@ import type { ChatTools, ToolName } from "./types";
 export function determineExplicitlyRequestedTools(
   selectedTool: keyof ChatTools | null
 ): ToolName[] | null {
-  if (!selectedTool && config.ai.tools.leanProof.enabled) {
-    return ["leanProof"];
+  if (!selectedTool) {
+    return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
   }
   if (selectedTool === "deepResearch") {
     return ["deepResearch"];
@@ -22,7 +23,7 @@ export function determineExplicitlyRequestedTools(
     return ["generateImage"];
   }
   if (selectedTool === "leanProof") {
-    return ["leanProof"];
+    return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
   }
   if (selectedTool === "createTextDocument") {
     if (!config.features.sandbox) {

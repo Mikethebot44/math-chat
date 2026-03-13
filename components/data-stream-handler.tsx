@@ -1,17 +1,13 @@
 "use client";
 import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
 import { useArtifact } from "@/hooks/use-artifact";
+import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import type { UiToolName } from "@/lib/ai/types";
-import { config } from "@/lib/config";
 import { useChatId } from "@/providers/chat-id-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 import { useSession } from "@/providers/session-provider";
 import { artifactDefinitions } from "./artifact-panel";
 import { useDataStream } from "./data-stream-provider";
-
-const DEFAULT_CHAT_TOOL: UiToolName | null = config.ai.tools.leanProof.enabled
-  ? "leanProof"
-  : null;
 
 function handleResearchUpdate({
   delta,

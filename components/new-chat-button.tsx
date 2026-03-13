@@ -27,8 +27,8 @@ export function NewChatButton() {
         }}
       >
         <Plus aria-label="New Chat" size={16} />
-        <span className="group-data-[collapsible=icon]:hidden">New Chat</span>
-        <span className="ml-auto text-muted-foreground text-xs group-data-[collapsible=icon]:hidden">
+        <span>New Chat</span>
+        <span className="ml-auto text-muted-foreground text-xs">
           {shortcutText}
         </span>
       </Link>

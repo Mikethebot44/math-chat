@@ -1,17 +1,11 @@
-import { Settings2, X } from "lucide-react";
-import {
-  createElement,
-  type Dispatch,
-  type SetStateAction,
-  useState,
-} from "react";
+import { CheckIcon, Settings2 } from "lucide-react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import type { UiToolName } from "@/lib/ai/types";
 import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
@@ -37,8 +31,6 @@ export function ResponsiveTools({
   const { getModelById } = useChatModels();
   const modelDef = getModelById(selectedModelId);
   const hasUnspecifiedFeatures = !modelDef?.input;
-
-  const activeTool = tools;
 
   const setTool = (tool: UiToolName | null) => {
     if (hasUnspecifiedFeatures && tool !== null) {
@@ -104,6 +96,7 @@ export function ResponsiveTools({
             {enabledTools.map((key) => {
               const tool = toolDefinitions[key];
               const Icon = tool.icon;
+
               return (
                 <DropdownMenuItem
                   className="flex items-center gap-2"
@@ -116,40 +109,17 @@ export function ResponsiveTools({
                 >
                   <Icon size={14} />
                   <span>{tool.name}</span>
-                  {tools === key && (
-                    <span className="text-xs opacity-70">✓</span>
-                  )}
-                  {hasUnspecifiedFeatures && (
+                  {tools === key ? (
+                    <CheckIcon className="ml-auto size-4 text-foreground" />
+                  ) : null}
+                  {hasUnspecifiedFeatures ? (
                     <span className="text-xs opacity-60">(not supported)</span>
-                  )}
+                  ) : null}
                 </DropdownMenuItem>
               );
             })}
           </DropdownMenuContent>
         </DropdownMenu>
-      )}
-
-      {activeTool && (
-        <>
-          <Separator
-            className="h-4 bg-muted-foreground/50"
-            orientation="vertical"
-          />
-          <Button
-            className="@[500px]:h-10 h-8 @[500px]:gap-2 gap-1 rounded-full text-primary hover:text-primary/80"
-            onClick={() => setTool(null)}
-            size="sm"
-            variant="ghost"
-          >
-            {createElement(toolDefinitions[activeTool].icon, {
-              size: 14,
-            })}
-            <span className="@[500px]:inline hidden">
-              {toolDefinitions[activeTool].shortName}
-            </span>
-            <X className="opacity-70" size={12} />
-          </Button>
-        </>
       )}
     </div>
   );

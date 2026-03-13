@@ -1,17 +1,16 @@
 "use client";
 
-import { ArrowLeftIcon, SigmaIcon } from "lucide-react";
+import { ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
   useCallback,
-  useDeferredValue,
   useEffect,
-  useMemo,
+  useRef,
   useState,
 } from "react";
 import { Loader } from "@/components/loader";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -26,25 +25,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type {
-  MathSearchExampleEntry,
-  MathSearchResult,
+import {
+  MATH_SEARCH_EXAMPLE_QUERIES,
+  type MathSearchResult,
 } from "@/lib/math-search/types";
-import { Button } from "./ui/button";
 
 interface SearchMathDialogProps {
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }
 
-const PAPER_TITLE_PATTERN = /(?:^|\n)Title:\s*(.+)/;
-const PAPER_ABSTRACT_PATTERN = /(?:^|\n)Abstract:\s*([\s\S]+)/;
 const EXAMPLE_TYPING_INTERVAL_MS = 75;
 const EXAMPLE_ERASE_INTERVAL_MS = 40;
 const EXAMPLE_HOLD_INTERVAL_MS = 3400;
-let cachedExampleSearches: MathSearchExampleEntry[] | null = null;
-let preloadExampleSearchesPromise: Promise<MathSearchExampleEntry[]> | null =
-  null;
+const WWW_PREFIX_PATTERN = /^www\./;
+const EXAMPLE_QUERIES = [...MATH_SEARCH_EXAMPLE_QUERIES];
 
 const fetchMathResults = async (
   query: string,
@@ -69,46 +64,6 @@ const fetchMathResults = async (
   return payload.results ?? [];
 };
 
-const getRenderableExampleSearches = (
-  exampleSearches: MathSearchExampleEntry[]
-): MathSearchExampleEntry[] => {
-  const examplesWithResults = exampleSearches.filter(
-    (exampleSearch) => exampleSearch.results.length > 0
-  );
-
-  if (examplesWithResults.length >= 2) {
-    return examplesWithResults;
-  }
-
-  return exampleSearches;
-};
-
-const preloadExampleSearches = (): Promise<MathSearchExampleEntry[]> => {
-  if (!preloadExampleSearchesPromise) {
-    preloadExampleSearchesPromise = fetch("/api/math-search/examples")
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          error?: string;
-          examples?: MathSearchExampleEntry[];
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Example cache fetch failed");
-        }
-
-        cachedExampleSearches = getRenderableExampleSearches(
-          payload.examples ?? []
-        );
-        return cachedExampleSearches;
-      })
-      .finally(() => {
-        preloadExampleSearchesPromise = null;
-      });
-  }
-
-  return preloadExampleSearchesPromise;
-};
-
 const truncateText = (text: string, maxLength: number): string => {
   const trimmed = text.trim();
   if (trimmed.length <= maxLength) {
@@ -118,160 +73,76 @@ const truncateText = (text: string, maxLength: number): string => {
   return `${trimmed.slice(0, maxLength).trimEnd()}...`;
 };
 
-const decodeHtmlEntities = (text: string): string =>
-  text
-    .replace(/<[^>]+>/g, "")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-
-const getString = (
-  metadata: Record<string, unknown>,
-  key: string
-): string | null => {
-  const value = metadata[key];
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-};
-
-const extractPaperTitle = (text: string): string | null => {
-  const match = text.match(PAPER_TITLE_PATTERN);
-  return match?.[1] ? decodeHtmlEntities(match[1].trim()) : null;
-};
-
-const extractPaperAbstract = (text: string): string | null => {
-  const match = text.match(PAPER_ABSTRACT_PATTERN);
-  return match?.[1] ? decodeHtmlEntities(match[1].trim()) : null;
-};
-
-const getTheoremSlogan = (metadata: Record<string, unknown>): string =>
-  getString(metadata, "slogan") ?? "Untitled theorem";
-
-const getPaperText = (metadata: Record<string, unknown>): string =>
-  getString(metadata, "text") ?? "";
-
-const getPaperTitle = (metadata: Record<string, unknown>): string => {
-  const text = getPaperText(metadata);
-  return (
-    extractPaperTitle(text) ??
-    getString(metadata, "arxiv_id") ??
-    "Untitled paper"
-  );
-};
-
-const getPaperAbstract = (metadata: Record<string, unknown>): string => {
-  const text = getPaperText(metadata);
-  return extractPaperAbstract(text) ?? "No abstract available.";
-};
-
-const getResultTitle = (result: MathSearchResult): string => {
-  if (result.source === "theorem") {
-    return truncateText(getTheoremSlogan(result.metadata), 88);
+const formatPublishedDate = (value: string | null): string | null => {
+  if (!value) {
+    return null;
   }
 
-  return getPaperTitle(result.metadata);
-};
-
-const getResultSubtitle = (result: MathSearchResult): string => {
-  if (result.source === "theorem") {
-    const theoremId = getString(result.metadata, "theorem_id");
-    return theoremId ? `Theorem ID ${theoremId}` : "Topology theorem";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
   }
 
-  const arxivId = getString(result.metadata, "arxiv_id");
-  const abstract = truncateText(getPaperAbstract(result.metadata), 220);
-  return arxivId ? `${arxivId} - ${abstract}` : abstract;
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 };
 
-const getSourceLabel = (source: MathSearchResult["source"]): string =>
-  source === "paper" ? "Paper" : "Theorem";
+const getHostname = (url: string): string | null => {
+  try {
+    return new URL(url).hostname.replace(WWW_PREFIX_PATTERN, "");
+  } catch {
+    return null;
+  }
+};
 
-const useExampleSearches = (open: boolean) => {
-  const [exampleSearches, setExampleSearches] = useState<
-    MathSearchExampleEntry[]
-  >(() => cachedExampleSearches ?? []);
-  const [activeExampleIndex, setActiveExampleIndex] = useState(0);
-  const [areExamplesLoading, setAreExamplesLoading] = useState(false);
+const getResultTitle = (result: MathSearchResult): string => result.title;
 
-  const activeExample = useMemo(() => {
-    if (exampleSearches.length === 0) {
-      return null;
-    }
+const getResultSubtitle = (result: MathSearchResult): string =>
+  truncateText(result.abstract || "No abstract available.", 220);
 
-    return (
-      exampleSearches[activeExampleIndex % exampleSearches.length] ??
-      exampleSearches[0]
-    );
-  }, [activeExampleIndex, exampleSearches]);
+const getResultMeta = (result: MathSearchResult): string | null => {
+  const segments = [
+    result.authors.length > 0
+      ? truncateText(result.authors.join(", "), 80)
+      : null,
+    formatPublishedDate(result.publishedDate),
+    getHostname(result.url),
+  ].filter((segment): segment is string => Boolean(segment));
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  if (segments.length === 0) {
+    return null;
+  }
 
-    if (cachedExampleSearches && cachedExampleSearches.length > 0) {
-      setExampleSearches(cachedExampleSearches);
-      setAreExamplesLoading(false);
-      return;
-    }
+  return segments.join(" | ");
+};
 
-    let isActive = true;
-    setAreExamplesLoading(true);
-
-    const preloadPromise = preloadExampleSearches();
-    preloadPromise
-      .then((cachedExamples) => {
-        if (isActive) {
-          setExampleSearches(cachedExamples);
-        }
-      })
-      .finally(() => {
-        if (isActive) {
-          setAreExamplesLoading(false);
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [open]);
-
-  const resetExampleSearches = useCallback(() => {
-    setActiveExampleIndex(0);
-  }, []);
-
-  return {
-    activeExample,
-    activeExampleIndex,
-    areExamplesLoading,
-    exampleSearches,
-    resetExampleSearches,
-    setActiveExampleIndex,
-  };
+const openPaperInNewTab = (url: string) => {
+  const newWindow = window.open(url, "_blank", "noopener,noreferrer");
+  if (newWindow) {
+    newWindow.opener = null;
+  }
 };
 
 interface SearchMathResultsListProps {
-  activeExample: MathSearchExampleEntry | null;
-  areExamplesLoading: boolean;
   error: string | null;
+  hasPendingChanges: boolean;
   isLoading: boolean;
-  isShowingExamples: boolean;
   onSelectResult: (result: MathSearchResult) => void;
   results: MathSearchResult[];
-  trimmedQuery: string;
+  submittedQuery: string;
 }
 
 const useAnimatedExamplePlaceholder = ({
   activeQuery,
   exampleCount,
-  isShowingExamples,
   open,
   setActiveExampleIndex,
 }: {
   activeQuery: string | null;
   exampleCount: number;
-  isShowingExamples: boolean;
   open: boolean;
   setActiveExampleIndex: Dispatch<SetStateAction<number>>;
 }) => {
@@ -279,7 +150,7 @@ const useAnimatedExamplePlaceholder = ({
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (!(open && isShowingExamples && activeQuery)) {
+    if (!(open && activeQuery)) {
       setAnimatedPlaceholder("");
       setIsDeleting(false);
       return;
@@ -335,7 +206,6 @@ const useAnimatedExamplePlaceholder = ({
     animatedPlaceholder,
     exampleCount,
     isDeleting,
-    isShowingExamples,
     open,
     setActiveExampleIndex,
   ]);
@@ -344,79 +214,67 @@ const useAnimatedExamplePlaceholder = ({
 };
 
 function SearchMathResultsList({
-  activeExample,
-  areExamplesLoading,
   error,
+  hasPendingChanges,
   isLoading,
-  isShowingExamples,
   onSelectResult,
   results,
-  trimmedQuery,
+  submittedQuery,
 }: SearchMathResultsListProps) {
-  const visibleResults = isShowingExamples
-    ? (activeExample?.results ?? [])
-    : results;
+  const shouldShowSearchState = !hasPendingChanges && submittedQuery.length > 0;
+  const isShortQuery = shouldShowSearchState && submittedQuery.length < 2;
+  const canShowResults = shouldShowSearchState && submittedQuery.length >= 2;
 
   return (
     <CommandList className="max-h-[420px]">
-      {isShowingExamples && areExamplesLoading && (
-        <div className="px-4">
-          <Loader
-            className="min-h-[240px]"
-            label="Loading example searches..."
-          />
-        </div>
-      )}
-
-      {!isShowingExamples && trimmedQuery.length < 2 && (
+      {isShortQuery && (
         <CommandEmpty>Type at least 2 characters to search.</CommandEmpty>
       )}
 
-      {!isShowingExamples &&
-        trimmedQuery.length >= 2 &&
-        !isLoading &&
-        !error &&
-        results.length === 0 && (
-          <CommandEmpty>No matching results found.</CommandEmpty>
-        )}
+      {canShowResults && !isLoading && !error && results.length === 0 && (
+        <CommandEmpty>No matching papers found.</CommandEmpty>
+      )}
 
-      {!isShowingExamples && isLoading && (
+      {canShowResults && isLoading && (
         <div className="px-4">
-          <Loader className="min-h-[240px]" label="Searching the library..." />
+          <Loader className="min-h-[240px]" label="Searching papers..." />
         </div>
       )}
-      {error && <CommandEmpty>{error}</CommandEmpty>}
 
-      {isShowingExamples &&
-        !areExamplesLoading &&
-        !error &&
-        activeExample &&
-        activeExample.results.length === 0 && (
-          <CommandEmpty>Example searches are unavailable.</CommandEmpty>
-        )}
+      {canShowResults && error && <CommandEmpty>{error}</CommandEmpty>}
 
-      {!(isLoading || areExamplesLoading || error) &&
-        visibleResults.map((result) => (
-          <CommandItem
-            className="items-start gap-3 py-3"
-            key={`${result.source}-${result.id}`}
-            onSelect={() => onSelectResult(result)}
-            value={`${result.id}-${getResultTitle(result)}`}
-          >
-            <SigmaIcon className="mt-0.5 h-4 w-4" />
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium">
-                  {getResultTitle(result)}
+      {canShowResults &&
+        !(isLoading || error) &&
+        results.map((result) => {
+          const metadataLine = getResultMeta(result);
+
+          return (
+            <CommandItem
+              className="items-start gap-3 py-3"
+              key={result.id}
+              onSelect={() => onSelectResult(result)}
+              value={`${result.id}-${result.title}`}
+            >
+              <FileTextIcon className="mt-0.5 h-4 w-4" />
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="line-clamp-2 font-medium">
+                    {getResultTitle(result)}
+                  </span>
+                  <ExternalLinkIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+                {metadataLine ? (
+                  <span className="line-clamp-1 text-muted-foreground text-xs">
+                    {metadataLine}
+                  </span>
+                ) : null}
+                <span className="line-clamp-2 text-muted-foreground text-xs">
+                  {getResultSubtitle(result)}
                 </span>
-                <Badge variant="outline">{getSourceLabel(result.source)}</Badge>
               </div>
-              <span className="line-clamp-2 text-muted-foreground text-xs">
-                {getResultSubtitle(result)}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
+            </CommandItem>
+          );
+        })}
     </CommandList>
   );
 }
@@ -426,183 +284,147 @@ export function SearchMathDialog({
   onOpenChange,
 }: SearchMathDialogProps) {
   const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
   const trimmedQuery = query.trim();
-  const trimmedDeferredQuery = deferredQuery.trim();
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [results, setResults] = useState<MathSearchResult[]>([]);
-  const [selectedResult, setSelectedResult] = useState<MathSearchResult | null>(
-    null
-  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isShowingExamples = trimmedQuery.length === 0;
-  const {
-    activeExample,
-    areExamplesLoading,
-    exampleSearches,
-    resetExampleSearches,
-    setActiveExampleIndex,
-  } = useExampleSearches(open);
+  const [activeExampleIndex, setActiveExampleIndex] = useState(0);
+  const activeExampleQuery =
+    EXAMPLE_QUERIES[activeExampleIndex % EXAMPLE_QUERIES.length] ?? null;
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const hasPendingChanges =
+    submittedQuery.length > 0 && submittedQuery !== trimmedQuery;
   const animatedExamplePlaceholder = useAnimatedExamplePlaceholder({
-    activeQuery: activeExample?.query ?? null,
-    exampleCount: exampleSearches.length,
-    isShowingExamples,
+    activeQuery: isShowingExamples ? activeExampleQuery : null,
+    exampleCount: EXAMPLE_QUERIES.length,
     open,
     setActiveExampleIndex,
   });
-
-  useEffect(() => {
-    if (!open || trimmedDeferredQuery.length < 2) {
-      setResults([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        setResults(
-          await fetchMathResults(trimmedDeferredQuery, controller.signal)
-        );
-      } catch (fetchError) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setError(
-          fetchError instanceof Error ? fetchError.message : "Search failed"
-        );
-        setResults([]);
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      }
-    }, 250);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [open, trimmedDeferredQuery]);
 
   const handleOpenChange = useCallback(
     (newOpen: boolean) => {
       onOpenChange(newOpen);
       if (!newOpen) {
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
         setQuery("");
+        setSubmittedQuery("");
         setResults([]);
-        resetExampleSearches();
-        setSelectedResult(null);
+        setActiveExampleIndex(0);
         setError(null);
         setIsLoading(false);
       }
     },
-    [onOpenChange, resetExampleSearches]
+    [onOpenChange]
   );
 
+  const handleSelectResult = useCallback(
+    (result: MathSearchResult) => {
+      openPaperInNewTab(result.url);
+      handleOpenChange(false);
+    },
+    [handleOpenChange]
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!open) {
+      return;
+    }
+
+    abortControllerRef.current?.abort();
+    const nextSubmittedQuery = trimmedQuery;
+    setSubmittedQuery(nextSubmittedQuery);
+    setResults([]);
+    setError(null);
+
+    if (nextSubmittedQuery.length < 2) {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+      return;
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setIsLoading(true);
+
+    try {
+      setResults(await fetchMathResults(nextSubmittedQuery, controller.signal));
+    } catch (fetchError) {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setError(
+        fetchError instanceof Error ? fetchError.message : "Search failed"
+      );
+      setResults([]);
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
+    }
+  }, [open, trimmedQuery]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   return (
-    <>
-      <Dialog onOpenChange={handleOpenChange} open={open && !selectedResult}>
-        <DialogHeader className="sr-only">
-          <DialogTitle>Search Math</DialogTitle>
-          <DialogDescription>
-            Search across papers and theorem statements.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogContent className="overflow-hidden p-0" showCloseButton={false}>
-          <Command shouldFilter={false}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
+      <DialogHeader className="sr-only">
+        <DialogTitle>Search Papers</DialogTitle>
+        <DialogDescription>
+          Search math research papers and open them directly.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogContent className="overflow-hidden p-0" showCloseButton={false}>
+        <Command shouldFilter={false}>
+          <div className="relative">
             <CommandInput
+              className="pr-20"
+              containerClassName="pr-3"
+              onKeyDown={async (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  await handleSubmit();
+                }
+              }}
               onValueChange={setQuery}
               placeholder={
-                isShowingExamples && activeExample
+                isShowingExamples && activeExampleQuery
                   ? animatedExamplePlaceholder
-                  : "Search math papers and theorems..."
+                  : "Search math research papers..."
               }
               value={query}
             />
-            <SearchMathResultsList
-              activeExample={activeExample}
-              areExamplesLoading={areExamplesLoading}
-              error={error}
-              isLoading={isLoading}
-              isShowingExamples={isShowingExamples}
-              onSelectResult={setSelectedResult}
-              results={results}
-              trimmedQuery={trimmedQuery}
-            />
-          </Command>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(detailOpen) => !detailOpen && setSelectedResult(null)}
-        open={!!selectedResult}
-      >
-        <DialogHeader className="sr-only">
-          <DialogTitle>Math Search Result</DialogTitle>
-          <DialogDescription>Selected math search result</DialogDescription>
-        </DialogHeader>
-        <DialogContent className="gap-3 sm:max-w-2xl">
-          <div className="flex items-center justify-between">
             <Button
-              onClick={() => setSelectedResult(null)}
+              className="absolute top-1/2 right-3 h-7 -translate-y-1/2 px-3 text-xs"
+              disabled={isLoading || trimmedQuery.length === 0}
+              onClick={handleSubmit}
               size="sm"
-              variant="outline"
+              type="button"
             >
-              <ArrowLeftIcon className="h-4 w-4" />
-              Back to search
+              Search
             </Button>
-            <Badge variant="outline">
-              {selectedResult ? getSourceLabel(selectedResult.source) : null}
-            </Badge>
           </div>
-          {selectedResult?.source === "paper" ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-base">
-                  {getPaperTitle(selectedResult.metadata)}
-                </h3>
-                {getString(selectedResult.metadata, "arxiv_id") ? (
-                  <p className="text-muted-foreground text-sm">
-                    arXiv: {getString(selectedResult.metadata, "arxiv_id")}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2 rounded-md border bg-muted/20 p-4">
-                <p className="font-medium text-sm">Abstract</p>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {getPaperAbstract(selectedResult.metadata)}
-                </p>
-              </div>
-            </div>
-          ) : null}
-          {selectedResult?.source === "theorem" ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-base">
-                  {truncateText(getTheoremSlogan(selectedResult.metadata), 120)}
-                </h3>
-                {getString(selectedResult.metadata, "theorem_id") ? (
-                  <p className="text-muted-foreground text-sm">
-                    Theorem ID:{" "}
-                    {getString(selectedResult.metadata, "theorem_id")}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-2 rounded-md border bg-muted/20 p-4">
-                <p className="font-medium text-sm">Statement</p>
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {getTheoremSlogan(selectedResult.metadata)}
-                </p>
-              </div>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </>
+          <SearchMathResultsList
+            error={error}
+            hasPendingChanges={hasPendingChanges}
+            isLoading={isLoading}
+            onSelectResult={handleSelectResult}
+            results={results}
+            submittedQuery={submittedQuery}
+          />
+        </Command>
+      </DialogContent>
+    </Dialog>
   );
 }

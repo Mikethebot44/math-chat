@@ -9,15 +9,11 @@ import { DataStreamProvider } from "@/components/data-stream-provider";
 import { MessageTreeSync } from "@/components/message-tree-sync";
 import { ArtifactProvider } from "@/hooks/use-artifact";
 import type { AppModelId } from "@/lib/ai/app-models";
+import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import type { ChatMessage, UiToolName } from "@/lib/ai/types";
-import { config } from "@/lib/config";
 import { CustomStoreProvider } from "@/lib/stores/custom-store-provider";
 import { useThreadEpoch } from "@/lib/stores/hooks-threads";
 import { ChatInputProvider } from "@/providers/chat-input-provider";
-
-const DEFAULT_CHAT_TOOL: UiToolName | null = config.ai.tools.leanProof.enabled
-  ? "leanProof"
-  : null;
 
 function ChatThreadSync({
   id,

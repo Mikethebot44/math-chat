@@ -1,5 +1,5 @@
 "use client";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { notFound, redirect } from "next/navigation";
 import { ChatSystem } from "@/components/chat-system";
 import {
@@ -14,7 +14,7 @@ function ChatPageContent({ chatId }: { chatId: string }) {
   const getChatByIdQueryOptions = useGetChatByIdQueryOptions(chatId);
   const { data: chat } = useSuspenseQuery(getChatByIdQueryOptions);
   const getMessagesByChatIdQueryOptions = useGetChatMessagesQueryOptions();
-  const { data: messages } = useQuery(getMessagesByChatIdQueryOptions);
+  const { data: messages } = useSuspenseQuery(getMessagesByChatIdQueryOptions);
 
   const { initialMessages, initialTool } = useChatSystemInitialState(messages);
 

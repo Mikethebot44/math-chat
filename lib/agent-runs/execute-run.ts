@@ -9,6 +9,10 @@ import { filterPartsForLLM } from "@/app/(chat)/api/chat/filter-reasoning-parts"
 import { getThreadUpToMessageId } from "@/app/(chat)/api/chat/get-thread-up-to-message-id";
 import { createCoreChatAgent } from "@/lib/ai/core-chat-agent";
 import { determineExplicitlyRequestedTools } from "@/lib/ai/determine-explicitly-requested-tools";
+import {
+  ALWAYS_ENABLED_MATH_AGENT_TOOLS,
+  DEFAULT_CHAT_TOOL,
+} from "@/lib/ai/math-agent";
 import { getModelProviderOptions, getLanguageModel } from "@/lib/ai/providers";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
@@ -65,34 +69,13 @@ function determineAllowedTools({
     return [];
   }
 
-  const allTools = [
-    "getWeather",
-    ...(config.features.sandbox
-      ? ([
-          "createTextDocument",
-          "createCodeDocument",
-          "createSheetDocument",
-          "editTextDocument",
-          "editCodeDocument",
-          "editSheetDocument",
-        ] as const)
-      : []),
-    "readDocument",
-    "retrieveUrl",
-    "webSearch",
-    "codeExecution",
-    "leanProof",
-    "aristotleCheckJob",
-    "generateImage",
-    "generateVideo",
-    "deepResearch",
-  ] satisfies ToolName[];
-
   if (explicitlyRequestedTools && explicitlyRequestedTools.length > 0) {
-    return explicitlyRequestedTools.filter((tool) => allTools.includes(tool));
+    return explicitlyRequestedTools.filter((tool) =>
+      ALWAYS_ENABLED_MATH_AGENT_TOOLS.includes(tool)
+    );
   }
 
-  return allTools;
+  return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
 }
 
 async function getSystemPromptForChat(chatId: string) {
@@ -468,7 +451,7 @@ export async function executeAgentRun({ runId }: { runId: string }) {
   }
 
   const selectedModelId = run.selectedModel as AppModelId;
-  const selectedTool = userMessage.metadata.selectedTool ?? null;
+  const selectedTool = DEFAULT_CHAT_TOOL;
   const explicitlyRequestedTools =
     determineExplicitlyRequestedTools(selectedTool);
   const modelDefinition = await getAppModelDefinition(selectedModelId);

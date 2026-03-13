@@ -24,9 +24,12 @@ import {
   generateFollowupSuggestions,
   streamFollowupSuggestions,
 } from "@/lib/ai/followup-suggestions";
+import {
+  ALWAYS_ENABLED_MATH_AGENT_TOOLS,
+  DEFAULT_CHAT_TOOL,
+} from "@/lib/ai/math-agent";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { calculateMessagesTokens } from "@/lib/ai/token-utils";
-import { allTools } from "@/lib/ai/tools/tools-definitions";
 import type { ChatMessage, ToolName } from "@/lib/ai/types";
 import {
   getAnonymousSession,
@@ -277,19 +280,12 @@ async function handleUserValidationAndCredits({
  * MCP tools are handled separately in core-chat-agent.
  */
 function determineAllowedTools({
-  isAnonymous,
   modelDefinition,
   explicitlyRequestedTools,
 }: {
-  isAnonymous: boolean;
   modelDefinition: AppModelDefinition;
   explicitlyRequestedTools: ToolName[] | null;
 }): ToolName[] {
-  // Start with all tools or anonymous-limited tools
-  const allowedTools: ToolName[] = isAnonymous
-    ? [...ANONYMOUS_LIMITS.AVAILABLE_TOOLS]
-    : [...allTools];
-
   // Disable all tools for models with unspecified features
   if (!modelDefinition?.input) {
     return [];
@@ -298,11 +294,11 @@ function determineAllowedTools({
   // If specific tools were requested, filter them against allowed tools
   if (explicitlyRequestedTools && explicitlyRequestedTools.length > 0) {
     return explicitlyRequestedTools.filter((tool) =>
-      allowedTools.includes(tool)
+      ALWAYS_ENABLED_MATH_AGENT_TOOLS.includes(tool)
     );
   }
 
-  return allowedTools;
+  return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
 }
 
 async function getSystemPrompt({
@@ -692,7 +688,6 @@ async function prepareRequestContext({
   const log = createModuleLogger("api:chat:prepare");
 
   const allowedTools = determineAllowedTools({
-    isAnonymous,
     modelDefinition,
     explicitlyRequestedTools,
   });
@@ -803,11 +798,13 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedModelId = DEFAULT_SCOUT_MODEL_ID;
+    const selectedTool = DEFAULT_CHAT_TOOL;
     const normalizedUserMessage: ChatMessage = {
       ...userMessage,
       metadata: {
         ...userMessage.metadata,
         selectedModel: selectedModelId,
+        selectedTool: selectedTool ?? undefined,
       },
     };
 
@@ -824,7 +821,6 @@ export async function POST(request: NextRequest) {
       sessionSetup;
     const backgroundChatEnabled = Boolean(userId) && isBackgroundChatEnabled();
 
-    const selectedTool = normalizedUserMessage.metadata.selectedTool ?? null;
     let isNewChat = false;
 
     // Handle authenticated user validation and credit check

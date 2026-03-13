@@ -1,9 +1,9 @@
 "use client";
 
-import { LoadingStatus } from "@/components/loading-status";
+import { Loader } from "@/components/loader";
 
 export function ThinkingMessage({
-  startedAt,
+  startedAt: _startedAt,
 }: {
   startedAt: Date | string;
 }) {
@@ -13,7 +13,12 @@ export function ThinkingMessage({
       data-role="assistant"
       data-testid="message-assistant-loading"
     >
-      <LoadingStatus label="Thinking..." startedAt={startedAt} />
+      <Loader
+        className="min-h-[240px]"
+        label="Thinking"
+        labelShimmer
+        subtitle={null}
+      />
     </div>
   );
 }
