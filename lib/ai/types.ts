@@ -66,7 +66,6 @@ const messageMetadataSchema = z.object({
   parentMessageId: z.string().nullable(),
   selectedModel: z.custom<AppModelId>((val) => typeof val === "string"),
   activeStreamId: z.string().nullable(),
-  activeRunId: z.string().nullable().optional(),
   selectedTool: frontendToolsSchema.optional(),
   usage: z.custom<LanguageModelUsage | undefined>((_val) => true).optional(),
 });

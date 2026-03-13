@@ -22,9 +22,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SIDEBAR_COOKIE_NAME } from "@/lib/sidebar-state";
 import { cn } from "@/lib/utils";
-
-const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -185,6 +184,7 @@ function Sidebar({
   collapsible = "offcanvas",
   className,
   children,
+  onClick,
   ...props
 }: React.ComponentProps<"div"> & {
   side?: "left" | "right";
@@ -196,6 +196,7 @@ function Sidebar({
     state,
     openMobile,
     setOpenMobile,
+    setOpen,
     setSidebarHovered,
   } = useSidebar();
 
@@ -275,6 +276,16 @@ function Sidebar({
         )}
         onMouseEnter={() => setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
+        onClick={(event) => {
+          if (state === "collapsed" && collapsible === "icon") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(true);
+            return;
+          }
+
+          onClick?.(event);
+        }}
         data-slot="sidebar-container"
         {...props}
       >

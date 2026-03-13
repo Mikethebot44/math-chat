@@ -10,6 +10,7 @@ import { DefaultModelProvider } from "@/providers/default-model-provider";
 import { SessionProvider } from "@/providers/session-provider";
 import { TRPCReactProvider } from "@/trpc/react";
 import { getQueryClient, HydrateClient, trpc } from "@/trpc/server";
+import { isSidebarInitiallyOpen, SIDEBAR_COOKIE_NAME } from "@/lib/sidebar-state";
 import { auth } from "../../lib/auth";
 import { ChatProviders } from "./chat-providers";
 
@@ -24,12 +25,14 @@ export default async function ChatLayout({
     getChatModels(),
   ]);
   const session = await auth.api.getSession({ headers: headersRes });
-  const isCollapsed = cookieStore.get("sidebar:state")?.value !== "true";
+  const isSidebarOpen = isSidebarInitiallyOpen(
+    cookieStore.get(SIDEBAR_COOKIE_NAME)?.value
+  );
 
   const defaultModel: AppModelId = DEFAULT_SCOUT_MODEL_ID;
 
-  // Prefetch sidebar data for authenticated users
-  if (session?.user?.id) {
+  // Prefetch sidebar data only when the sidebar will render immediately.
+  if (session?.user?.id && isSidebarOpen) {
     const queryClient = getQueryClient();
     queryClient.prefetchQuery(trpc.project.list.queryOptions());
     queryClient.prefetchQuery(
@@ -42,7 +45,7 @@ export default async function ChatLayout({
       <HydrateClient>
         <SessionProvider initialSession={session}>
           <ChatProviders>
-            <SidebarProvider defaultOpen={!isCollapsed}>
+            <SidebarProvider defaultOpen={isSidebarOpen}>
               <AppSidebar />
               <SidebarInset
                 style={

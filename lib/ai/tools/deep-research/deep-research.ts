@@ -1,5 +1,4 @@
 import { type ModelMessage, tool } from "ai";
-import { Langfuse } from "langfuse";
 import { z } from "zod";
 
 import type { ToolSession } from "@/lib/ai/tools/types";
@@ -8,6 +7,9 @@ import { generateUUID } from "@/lib/utils";
 import type { StreamWriter } from "../../types";
 import { getDeepResearchConfig } from "./configuration";
 import { runDeepResearchPipeline } from "./pipeline";
+
+const DEEP_RESEARCH_TRACING_ENABLED =
+  process.env.ENABLE_LANGFUSE_DEEP_RESEARCH_TRACING === "true";
 
 export const deepResearch = ({
   session,
@@ -41,12 +43,17 @@ Use for:
 
       try {
         const requestId = generateUUID();
+        let flushLangfuseTrace: (() => Promise<void>) | null = null;
         // Log both requestId and messageId for traceability
         console.log("DeepResearch start", { requestId, messageId });
 
-        // Open a Langfuse trace with id = requestId before the run
-        const langfuse = new Langfuse();
-        langfuse.trace({ id: requestId, name: "deep-research" });
+        if (DEEP_RESEARCH_TRACING_ENABLED) {
+          const { Langfuse } = await import("langfuse");
+          const langfuse = new Langfuse();
+          langfuse.trace({ id: requestId, name: "deep-research" });
+          flushLangfuseTrace = () => langfuse.flushAsync();
+        }
+
         const researchResult = await runDeepResearchPipeline(
           {
             requestId,
@@ -59,8 +66,9 @@ Use for:
           { session, costAccumulator, abortSignal }
         );
 
-        // Flush the Langfuse trace right after the run
-        await langfuse.flushAsync();
+        if (flushLangfuseTrace) {
+          await flushLangfuseTrace();
+        }
 
         // biome-ignore lint/style/useDefaultSwitchClause: researchResult is of type never but this might be reached other
         switch (researchResult.type) {

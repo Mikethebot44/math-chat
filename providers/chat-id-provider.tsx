@@ -56,7 +56,6 @@ export function ChatIdProvider({ children }: { children: ReactNode }) {
   const refreshChatID = useCallback(() => {
     const newId = generateUUID();
     setChatIdState({ provisionalChatId: newId, confirmedChatId: null });
-    window.history.pushState(null, "", "/");
   }, []);
 
   const value = useMemo(

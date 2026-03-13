@@ -133,7 +133,7 @@ function SelectedModelId({ messageId }: { messageId: string }) {
     return (
       <div className="ml-2 flex items-center gap-2">
         <span className="font-semibold text-muted-foreground text-sm">
-          Thought for {formatElapsedDuration(thoughtDurationMs)}
+          Reasoned for {formatElapsedDuration(thoughtDurationMs)}
         </span>
         {leanDownloadData ? (
           <Action

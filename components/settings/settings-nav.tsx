@@ -1,6 +1,6 @@
 "use client";
 
-import { Plug, Settings } from "lucide-react";
+import { CreditCard, Plug, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
@@ -18,6 +18,7 @@ export function SettingsNav({
     () =>
       [
         { href: "/settings" as const, label: "General", icon: Settings },
+        { href: "/settings/billing" as const, label: "Billing", icon: CreditCard },
         ...(config.ai.tools.mcp.enabled
           ? [
               {

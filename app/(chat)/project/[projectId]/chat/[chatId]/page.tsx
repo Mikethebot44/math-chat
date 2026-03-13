@@ -12,6 +12,7 @@ export default async function ProjectChatPageRoute({
   // loading the full message history.
   prefetch(trpc.project.getById.queryOptions({ id: projectId }));
   prefetch(trpc.chat.getChatById.queryOptions({ chatId }));
+  prefetch(trpc.chat.getChatMessages.queryOptions({ chatId }));
 
   return (
     <HydrateClient>

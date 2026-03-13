@@ -3,10 +3,12 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { useChatActions, useChatStoreApi } from "@ai-sdk-tools/store";
 import { useMutation } from "@tanstack/react-query";
 import { CameraIcon, FileIcon, ImageIcon, PlusIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import {
   type ChangeEvent,
   memo,
+  startTransition,
   useCallback,
   useMemo,
   useRef,
@@ -24,13 +26,9 @@ import {
 import { ContextBar } from "@/components/context-bar";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
-import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  cancelAgentRun,
-  enqueueAuthenticatedChatMessage,
-} from "@/lib/agent-runs/client";
 import type { AppModelId } from "@/lib/ai/app-model-id";
+import { getChatHref } from "@/lib/chat-routes";
 import { SCOUT_MODEL_IDS } from "@/lib/ai/scout-models";
 import type { Attachment, ChatMessage } from "@/lib/ai/types";
 import { config } from "@/lib/config";
@@ -56,9 +54,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { LimitDisplay } from "./upgrade-cta/limit-display";
 import { LoginPrompt } from "./upgrade-cta/login-prompt";
-
-const PROJECT_ROUTE_REGEX = /^\/project\/([^/]+)$/;
-
 /** Derive accept string for images only */
 function getAcceptImages(acceptedTypes: Record<string, string[]>): string {
   return Object.entries(acceptedTypes)
@@ -99,25 +94,17 @@ function PureMultimodalInput({
   projectId?: string;
   onSendMessage?: (message: ChatMessage) => void | Promise<void>;
 }) {
+  const router = useRouter();
   const storeApi = useChatStoreApi<ChatMessage>();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
+  const { isPersisted } = useChatId();
   const trpc = useTRPC();
-  const {
-    backgroundChatEnabled: useBackgroundChat,
-    isRuntimeConfigResolved,
-  } = useBackgroundChatConfig();
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
-  const { confirmChatId } = useChatId();
-  const {
-    setError,
-    setMessages,
-    setStatus,
-    sendMessage,
-    stop: stopHelper,
-  } = useChatActions<ChatMessage>();
+  const { sendMessage, setMessages, stop: stopHelper } =
+    useChatActions<ChatMessage>();
   const lastMessageId = useLastMessageId();
   const { displayStatus, hasPendingAristotle, isBusy } = useChatBusyState();
   const {
@@ -190,12 +177,6 @@ function PureMultimodalInput({
   const submission = useMemo(():
     | { enabled: false; message: string }
     | { enabled: true } => {
-    if (session?.user && !isRuntimeConfigResolved) {
-      return {
-        enabled: false,
-        message: "Loading chat configuration...",
-      };
-    }
     if (isModelDisallowedForAnonymous) {
       return { enabled: false, message: "Log in to use this model" };
     }
@@ -222,8 +203,6 @@ function PureMultimodalInput({
     isBusy,
     isEmpty,
     isModelDisallowedForAnonymous,
-    isRuntimeConfigResolved,
-    session?.user,
     uploadQueue.length,
   ]);
 
@@ -273,28 +252,21 @@ function PureMultimodalInput({
   // Anonymous users stay on / - no URL redirect for them
   const updateChatUrl = useCallback(
     (chatIdToAdd: string) => {
-      if (!session?.user) {
+      if (!(session?.user && !isPersisted)) {
         return;
       }
 
-      const currentPath = window.location.pathname;
-      if (currentPath === "/") {
-        window.history.pushState({}, "", `/chat/${chatIdToAdd}`);
-        return;
-      }
+      const chatHref = getChatHref({
+        chatId: chatIdToAdd,
+        projectId: projectId ?? null,
+      });
 
-      // Handle project routes: /project/:projectId -> /project/:projectId/chat/:chatId
-      const projectMatch = currentPath.match(PROJECT_ROUTE_REGEX);
-      if (projectMatch) {
-        const [, projectId] = projectMatch;
-        window.history.pushState(
-          {},
-          "",
-          `/project/${projectId}/chat/${chatIdToAdd}`
-        );
-      }
+      startTransition(() => {
+        router.prefetch(chatHref);
+        router.replace(chatHref);
+      });
     },
-    [session?.user]
+    [isPersisted, projectId, router, session?.user]
   );
 
   // Trim messages in edit mode
@@ -371,7 +343,6 @@ function PureMultimodalInput({
         },
       ],
       metadata: {
-        activeRunId: null,
         createdAt: new Date(),
         parentMessageId: effectiveParentMessageId,
         selectedModel: selectedModelId,
@@ -385,43 +356,7 @@ function PureMultimodalInput({
 
     addMessageToTree(message);
     saveChatMessage({ message, chatId });
-
-    if (useBackgroundChat) {
-      const currentMessages = storeApi.getState().messages;
-      setMessages([...currentMessages, message]);
-      setError(undefined);
-      setStatus("submitted");
-      void enqueueAuthenticatedChatMessage({
-        chatId,
-        message,
-        projectId,
-      })
-        .then((payload) => {
-          confirmChatId(payload.chatId);
-          addMessageToTree(payload.assistantMessage);
-          const nextMessages = storeApi.getState().messages;
-          const hasAssistantPlaceholder = nextMessages.some(
-            (candidate) => candidate.id === payload.assistantMessage.id
-          );
-          if (!hasAssistantPlaceholder) {
-            setMessages([...nextMessages, payload.assistantMessage]);
-          }
-          saveChatMessage({
-            chatId,
-            message: payload.assistantMessage,
-          });
-        })
-        .catch((error) => {
-          console.error(error);
-          setStatus("error");
-          setError(
-            error instanceof Error ? error : new Error("Failed to enqueue chat")
-          );
-          toast.error("Failed to send message");
-        });
-    } else {
-      sendMessage(message);
-    }
+    sendMessage(message);
 
     // Refocus after submit
     if (!isMobile) {
@@ -437,19 +372,13 @@ function PureMultimodalInput({
     getInputValue,
     saveChatMessage,
     parentMessageId,
-    projectId,
     selectedModelId,
     editorRef,
     lastMessageId,
     onSendMessage,
-    confirmChatId,
-    setError,
-    setStatus,
     sendMessage,
-    useBackgroundChat,
     updateChatUrl,
     trimMessagesInEditMode,
-    storeApi,
   ]);
 
   const submitForm = useCallback(() => {
@@ -643,21 +572,7 @@ function PureMultimodalInput({
   });
 
   const handleStop = useCallback(() => {
-    if (session?.user && useBackgroundChat && lastMessageId) {
-      const lastMessage = storeApi
-        .getState()
-        .getThrottledMessages()
-        .find((message: ChatMessage) => message.id === lastMessageId);
-      const activeRunId = lastMessage?.metadata?.activeRunId;
-      if (activeRunId) {
-        void cancelAgentRun(activeRunId).catch((error) => {
-          console.error(error);
-          toast.error("Failed to cancel background run");
-        });
-      } else {
-        stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
-      }
-    } else if (session?.user && lastMessageId) {
+    if (session?.user && lastMessageId) {
       stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
     }
     stopHelper?.();
@@ -667,8 +582,6 @@ function PureMultimodalInput({
     session?.user,
     stopHelper,
     stopStreamMutation,
-    storeApi,
-    useBackgroundChat,
   ]);
 
   return (

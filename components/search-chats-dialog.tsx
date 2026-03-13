@@ -2,7 +2,17 @@
 
 import { isToday, isYesterday, subMonths, subWeeks } from "date-fns";
 import { MessageSquare } from "lucide-react";
-import { memo, useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   Command,
@@ -20,6 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useGetAllChats } from "@/hooks/chat-sync-hooks";
+import { getChatHref } from "@/lib/chat-routes";
 import type { UIChat } from "@/lib/types/ui-chat";
 
 interface GroupedChats {
@@ -72,24 +83,18 @@ const filterChats = (chats: UIChat[], query: string): UIChat[] => {
 };
 
 interface SearchChatsListProps {
-  deferredQuery: string;
-  onSelectChat: (chatId: string) => void;
+  groupedChats: GroupedChats | null;
+  isLoading: boolean;
+  onHighlightChat: (chat: UIChat) => void;
+  onSelectChat: (chat: UIChat) => void;
 }
 
 const SearchChatsList = memo(function SearchChatsListInner({
+  groupedChats,
+  isLoading,
+  onHighlightChat,
   onSelectChat,
-  deferredQuery,
 }: SearchChatsListProps) {
-  const { data: chats, isLoading } = useGetAllChats();
-
-  const groupedChats = useMemo(() => {
-    if (!chats) {
-      return null;
-    }
-    const filteredChats = filterChats(chats, deferredQuery);
-    return groupChatsByDate(filteredChats);
-  }, [chats, deferredQuery]);
-
   const renderChatGroup = (
     groupChats: UIChat[],
     groupName: string,
@@ -105,7 +110,9 @@ const SearchChatsList = memo(function SearchChatsListInner({
           <CommandItem
             className="flex cursor-pointer items-center gap-2 p-2"
             key={chat.id}
-            onSelect={() => onSelectChat(chat.id)}
+            onFocus={() => onHighlightChat(chat)}
+            onMouseMove={() => onHighlightChat(chat)}
+            onSelect={() => onSelectChat(chat)}
             value={chat.id}
           >
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -158,17 +165,83 @@ export function SearchChatsDialog({
   onOpenChange,
   onSelectChat,
 }: SearchChatsDialogProps) {
+  const router = useRouter();
+  const commandListRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
+  const { data: chats, isLoading } = useGetAllChats();
+  const [highlightedChatId, setHighlightedChatId] = useState("");
+
+  const chatsById = useMemo(
+    () => new Map((chats ?? []).map((chat) => [chat.id, chat])),
+    [chats]
+  );
+
+  const groupedChats = useMemo(() => {
+    if (!chats) {
+      return null;
+    }
+
+    const filteredChats = filterChats(chats, deferredQuery);
+    return groupChatsByDate(filteredChats);
+  }, [chats, deferredQuery]);
+
+  const syncHighlightedChatFromSelection = useCallback(() => {
+    requestAnimationFrame(() => {
+      const selectedItem = commandListRef.current?.querySelector<HTMLElement>(
+        '[cmdk-item][data-selected="true"]'
+      );
+      const selectedChatId = selectedItem?.getAttribute("data-value");
+
+      if (selectedChatId) {
+        setHighlightedChatId(selectedChatId);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!highlightedChatId) {
+      return;
+    }
+
+    const highlightedChat = chatsById.get(highlightedChatId);
+    if (!highlightedChat) {
+      return;
+    }
+
+    router.prefetch(
+      getChatHref({
+        chatId: highlightedChat.id,
+        projectId: highlightedChat.projectId,
+      })
+    );
+  }, [chatsById, highlightedChatId, router]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    syncHighlightedChatFromSelection();
+  }, [groupedChats, open, syncHighlightedChatFromSelection]);
 
   const handleSelectChat = useCallback(
-    (chatId: string) => {
+    (chat: UIChat) => {
+      const chatHref = getChatHref({
+        chatId: chat.id,
+        projectId: chat.projectId,
+      });
+
       onOpenChange(false);
       onSelectChat();
       setQuery("");
-      window.history.pushState(null, "", `/chat/${chatId}`);
+      setHighlightedChatId("");
+      startTransition(() => {
+        router.prefetch(chatHref);
+        router.push(chatHref);
+      });
     },
-    [onOpenChange, onSelectChat]
+    [onOpenChange, onSelectChat, router]
   );
 
   const handleOpenChange = useCallback(
@@ -176,6 +249,7 @@ export function SearchChatsDialog({
       onOpenChange(newOpen);
       if (!newOpen) {
         setQuery("");
+        setHighlightedChatId("");
       }
     },
     [onOpenChange]
@@ -193,14 +267,17 @@ export function SearchChatsDialog({
           shouldFilter={false}
         >
           <CommandInput
+            onKeyDown={syncHighlightedChatFromSelection}
             onValueChange={setQuery}
             placeholder="Search your chats..."
             value={query}
           />
-          <CommandList>
+          <CommandList ref={commandListRef}>
             {open && (
               <SearchChatsList
-                deferredQuery={deferredQuery}
+                groupedChats={groupedChats}
+                isLoading={isLoading}
+                onHighlightChat={(chat) => setHighlightedChatId(chat.id)}
                 onSelectChat={handleSelectChat}
               />
             )}

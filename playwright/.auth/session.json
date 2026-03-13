@@ -1,0 +1,39 @@
+{
+  "cookies": [
+    {
+      "name": "better-auth.session_token",
+      "value": "a4086855-ea9e-4659-acda-bb6521f0237e.xhjeoTpz%2F%2F7kDlqcT5mH0tAceQeMb2sTUqnvpHjMnkQ%3D",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1775993988.017969,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "better-auth.session_data",
+      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wNC0xMlQxMTozOTo0OC40NTJaIiwidG9rZW4iOiJhNDA4Njg1NS1lYTllLTQ2NTktYWNkYS1iYjY1MjFmMDIzN2UiLCJjcmVhdGVkQXQiOiIyMDI2LTAzLTEzVDExOjM5OjQ4LjQ1MloiLCJ1cGRhdGVkQXQiOiIyMDI2LTAzLTEzVDExOjM5OjQ4LjQ1MloiLCJpcEFkZHJlc3MiOm51bGwsInVzZXJBZ2VudCI6bnVsbCwidXNlcklkIjoiMzU1ZDRiM2ItZjU0ZS00M2FiLWJjNDYtOTViMzhkOTIzOWNjIiwiaWQiOiIyY2VhMjk4Ni00YzFkLTQzNDktODQ3NC01N2E3MmI4MjQ3ZjUifSwidXNlciI6eyJuYW1lIjoiRGV2IFVzZXIiLCJlbWFpbCI6ImRldkBsb2NhbGhvc3QiLCJlbWFpbFZlcmlmaWVkIjp0cnVlLCJpbWFnZSI6bnVsbCwiY3JlYXRlZEF0IjoiMjAyNi0wMy0wN1QwMjoxODozMS41NDRaIiwidXBkYXRlZEF0IjoiMjAyNi0wMy0wN1QwMjoxODozMS41NDRaIiwiaWQiOiIzNTVkNGIzYi1mNTRlLTQzYWItYmM0Ni05NWIzOGQ5MjM5Y2MifSwidXBkYXRlZEF0IjoxNzczNDAyMDA0Nzg3LCJ2ZXJzaW9uIjoiMSJ9LCJleHBpcmVzQXQiOjE3NzM0MDIzMDQ3ODcsInNpZ25hdHVyZSI6Im1kTGV6VjNEZElGVkdDbHlaTEhyX1RNUU13dUwtRnN6eDVXZEFHV1B3V00ifQ",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1773402305.640069,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "react-scan-widget-settings-v2",
+          "value": "{\"corner\":\"bottom-right\",\"dimensions\":{\"isFullWidth\":false,\"isFullHeight\":false,\"width\":550,\"height\":350,\"position\":{\"x\":24,\"y\":24}},\"lastDimensions\":{\"isFullWidth\":false,\"isFullHeight\":false,\"width\":550,\"height\":350,\"position\":{\"x\":24,\"y\":24}},\"componentsTree\":{\"width\":240}}"
+        },
+        {
+          "name": "react-scan-notifications-audio",
+          "value": "false"
+        }
+      ]
+    }
+  ]
+}

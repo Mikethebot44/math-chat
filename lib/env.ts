@@ -12,8 +12,7 @@ export const env = createEnv({
   server: serverEnvSchema,
   client: clientEnvSchema,
   experimental__runtimeEnv: {
-    NEXT_PUBLIC_BACKGROUND_CHAT_E2B:
-      process.env.NEXT_PUBLIC_BACKGROUND_CHAT_E2B,
+    NEXT_PUBLIC_ENABLE_ANALYTICS: process.env.NEXT_PUBLIC_ENABLE_ANALYTICS,
     NEXT_PUBLIC_LEAN_RUN_ENABLED: process.env.NEXT_PUBLIC_LEAN_RUN_ENABLED,
   },
   emptyStringAsUndefined: true,

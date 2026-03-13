@@ -14,6 +14,16 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import { auth } from "@/lib/auth";
 
+const parsedSimulatedDelayMs = Number.parseInt(
+  process.env.TRPC_DEV_LATENCY_MS ?? "0",
+  10
+);
+const simulatedDelayMs =
+  Number.isFinite(parsedSimulatedDelayMs) && parsedSimulatedDelayMs > 0
+    ? parsedSimulatedDelayMs
+    : 0;
+let loggedSimulatedDelay = false;
+
 /**
  * 1. CONTEXT
  *
@@ -86,10 +96,15 @@ export const createTRPCRouter = t.router;
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
 
-  if (t._config.isDev) {
-    // artificial delay in dev
-    const waitMs = Math.floor(Math.random() * 400) + 100;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  if (t._config.isDev && simulatedDelayMs > 0) {
+    if (!loggedSimulatedDelay) {
+      console.log(
+        `[TRPC] Simulated development latency enabled (${simulatedDelayMs}ms)`
+      );
+      loggedSimulatedDelay = true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, simulatedDelayMs));
   }
 
   const result = await next();

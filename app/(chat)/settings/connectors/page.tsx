@@ -1,4 +1,4 @@
-import { ConnectorsSettings } from "@/components/settings/connectors-settings";
+import { ConnectorsSettingsShell } from "@/components/settings/connectors-settings-shell";
 import {
   SettingsPage,
   SettingsPageHeader,
@@ -19,7 +19,7 @@ export default async function ConnectorsSettingsPage() {
             with external tools.
           </p>
         </SettingsPageHeader>
-        <ConnectorsSettings />
+        <ConnectorsSettingsShell />
       </SettingsPage>
     </HydrateClient>
   );
