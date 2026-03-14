@@ -9,7 +9,7 @@ import { ChatSDKError } from "@/lib/ai/errors";
 import type { ChatMessage } from "@/lib/ai/types";
 import { auth } from "@/lib/auth";
 import { getChatById, getChatMessageWithPartsById } from "@/lib/db/queries";
-import { getStreamContext } from "../../route";
+import { getStreamContext } from "../../stream-context";
 
 function appendMessageResponse(message: ChatMessage) {
   const stream = createUIMessageStream<ChatMessage>({

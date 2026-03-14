@@ -5,11 +5,13 @@ export const mathSearchQuerySchema = z.object({
 });
 
 export const mathSearchResultSchema = z.object({
+  abstract: z.string(),
+  authors: z.array(z.string()),
   id: z.string(),
-  metadata: z.record(z.string(), z.unknown()),
-  rerankScore: z.number(),
-  source: z.enum(["paper", "theorem"]),
-  vectorScore: z.number(),
+  publishedDate: z.string().nullable(),
+  source: z.literal("paper"),
+  title: z.string().min(1),
+  url: z.string().url(),
 });
 
 export const mathSearchExampleEntrySchema = z.object({

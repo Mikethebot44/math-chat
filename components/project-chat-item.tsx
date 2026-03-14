@@ -2,8 +2,8 @@
 
 import { formatDistance } from "date-fns";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { ChatRenameDialog } from "@/components/chat-rename-dialog";
 import { ShareDialog } from "@/components/share-button";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ShareMenuItem } from "@/components/upgrade-cta/share-menu-item";
+import { getChatHref } from "@/lib/chat-routes";
 import type { UIChat } from "@/lib/types/ui-chat";
 export function ProjectChatItem({
   chat,
@@ -26,7 +27,10 @@ export function ProjectChatItem({
 }) {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const chatHref: `/project/${string}/chat/${string}` = `/project/${chat.projectId}/chat/${chat.id}`;
+  const chatHref = getChatHref({
+    chatId: chat.id,
+    projectId: chat.projectId,
+  });
 
   const handleRename = async (title: string) => {
     await onRename(chat.id, title);
@@ -42,7 +46,7 @@ export function ProjectChatItem({
     <>
       <div className="group relative">
         <div className="relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50">
-          <Link className="absolute inset-0 z-10" href={chatHref} />
+          <IntentPrefetchLink className="absolute inset-0 z-10" href={chatHref} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-sm">{chat.title}</div>
             <div className="text-muted-foreground text-xs">

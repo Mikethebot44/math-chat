@@ -47,10 +47,8 @@ export function SearchChatsButton() {
         tooltip="Search chats"
       >
         <SearchIcon className="h-4 w-4" />
-        <span className="group-data-[collapsible=icon]:hidden">
-          Search chats
-        </span>
-        <span className="ml-auto text-muted-foreground text-xs group-data-[collapsible=icon]:hidden">
+        <span>Search chats</span>
+        <span className="ml-auto text-muted-foreground text-xs">
           {shortcutText}
         </span>
       </SidebarMenuButton>

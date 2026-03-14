@@ -8,6 +8,22 @@ import {
   getAristotlePromptForStatus,
 } from "./aristotle-loading-lines";
 
+function createPendingJobSnapshot(jobId: string) {
+  return {
+    completed: false,
+    errorMessage: null,
+    failed: false,
+    jobId,
+    leanCode: "",
+    message: "",
+    mode: "formalize_and_prove" as const,
+    progress: null,
+    rawResponse: null,
+    status: "pending",
+    summary: "",
+  };
+}
+
 function createMessage({
   id,
   parentMessageId = null,
@@ -47,10 +63,7 @@ describe("aristotle loading lines", () => {
             prompt: "Prove the sum of two even numbers is even.",
             mode: "formalize_and_prove",
           },
-          output: {
-            completed: false,
-            jobId: "job-1",
-          },
+          output: createPendingJobSnapshot("job-1"),
         },
       ],
     });
@@ -85,10 +98,14 @@ describe("aristotle loading lines", () => {
           input: {
             jobId: "job-2",
             waitForCompletion: false,
+            maxWaitMs: 90_000,
+            pollIntervalMs: 5_000,
           },
           output: {
-            completed: false,
-            jobId: "job-2",
+            ...createPendingJobSnapshot("job-2"),
+            checksPerformed: 0,
+            timedOut: false,
+            waitedMs: 0,
           },
         },
       ],

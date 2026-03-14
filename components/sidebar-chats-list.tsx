@@ -89,6 +89,41 @@ export function SidebarChatsList() {
     return groups;
   }, [chats]);
 
+  const orderedChats = useMemo(
+    () => [
+      ...groupedChats.pinned,
+      ...groupedChats.today,
+      ...groupedChats.yesterday,
+      ...groupedChats.lastWeek,
+      ...groupedChats.lastMonth,
+      ...groupedChats.older,
+    ],
+    [groupedChats]
+  );
+
+  const activeChatId = chatId;
+  const eagerPrefetchChatIds = useMemo(() => {
+    const ids = new Set<string>();
+    const activeIndex = orderedChats.findIndex((chat) => chat.id === activeChatId);
+
+    if (activeIndex === -1) {
+      return ids;
+    }
+
+    const previousChat = orderedChats[activeIndex - 1];
+    const nextChat = orderedChats[activeIndex + 1];
+
+    if (previousChat) {
+      ids.add(previousChat.id);
+    }
+
+    if (nextChat) {
+      ids.add(nextChat.id);
+    }
+
+    return ids;
+  }, [activeChatId, orderedChats]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col">
@@ -112,14 +147,6 @@ export function SidebarChatsList() {
     );
   }
 
-  const prefetchLimit = 10;
-  let renderedChatsCount = 0;
-  const shouldPrefetchNextChat = () => {
-    const shouldPrefetch = renderedChatsCount < prefetchLimit;
-    renderedChatsCount += 1;
-    return shouldPrefetch;
-  };
-
   return (
     <>
       {groupedChats.pinned.length > 0 && (
@@ -142,7 +169,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}
@@ -171,7 +198,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}
@@ -198,7 +225,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}
@@ -225,7 +252,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}
@@ -252,7 +279,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}
@@ -279,7 +306,7 @@ export function SidebarChatsList() {
               onRename={(id, title) => {
                 renameChatMutation({ chatId: id, title });
               }}
-              prefetch={shouldPrefetchNextChat()}
+              eagerPrefetch={eagerPrefetchChatIds.has(chat.id)}
               setOpenMobile={setOpenMobile}
             />
           ))}

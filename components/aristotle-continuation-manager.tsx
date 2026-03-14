@@ -4,7 +4,6 @@ import { useChatActions, useChatStatus } from "@ai-sdk-tools/store";
 import type { MutableRefObject } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import type { ChatMessage } from "@/lib/ai/types";
 import {
   findPendingAristotleSourceMessage,
@@ -150,27 +149,20 @@ async function pollAristotleContinuation({
 }
 
 export function AristotleContinuationManager({ chatId }: { chatId: string }) {
-  const { backgroundChatEnabled, isAuthenticated, isRuntimeConfigResolved } =
-    useBackgroundChatConfig();
   const status = useChatStatus();
   const messages = useMessages() as ChatMessage[];
   const { setMessages } = useChatActions<ChatMessage>();
   const addMessageToTree = useAddMessageToTree();
   const activeMessageIdRef = useRef<string | null>(null);
   const messagesRef = useRef(messages);
-  const isContinuationEnabled =
-    !isAuthenticated || (isRuntimeConfigResolved && !backgroundChatEnabled);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
   const pendingMessage = useMemo(
-    () =>
-      isContinuationEnabled
-        ? findPendingAristotleSourceMessage(messages)
-        : null,
-    [isContinuationEnabled, messages]
+    () => findPendingAristotleSourceMessage(messages),
+    [messages]
   );
 
   useEffect(() => {
@@ -211,10 +203,6 @@ export function AristotleContinuationManager({ chatId }: { chatId: string }) {
       cancelled = true;
     };
   }, [addMessageToTree, chatId, pendingMessage, setMessages, status]);
-
-  if (!isContinuationEnabled) {
-    return null;
-  }
 
   return null;
 }

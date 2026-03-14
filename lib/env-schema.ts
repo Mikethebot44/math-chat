@@ -23,6 +23,14 @@ export const serverEnvSchema = {
     .string()
     .optional()
     .describe("Vercel Blob storage token for file uploads"),
+  STRIPE_SECRET_KEY: z
+    .string()
+    .optional()
+    .describe("Stripe secret key for Checkout session creation"),
+  STRIPE_WEBHOOK_SECRET: z
+    .string()
+    .optional()
+    .describe("Stripe webhook signing secret for payment confirmation"),
 
   // Authentication providers (enable in chat.config.ts)
   AUTH_GOOGLE_ID: z.string().optional().describe("Google OAuth client ID"),
@@ -64,19 +72,6 @@ export const serverEnvSchema = {
     .optional()
     .describe("API key for OpenAI-compatible provider"),
   OPENAI_API_KEY: z.string().optional().describe("OpenAI API key"),
-  DEEPINFRA_API_KEY: z.string().optional().describe("DeepInfra API key"),
-  MATH_SEARCH_VECTOR_MODEL: z
-    .string()
-    .optional()
-    .describe(
-      "Embedding model used to query Pinecone math-search indexes; must match the model used during indexing"
-    ),
-  MATH_SEARCH_RERANK_MODEL: z
-    .string()
-    .optional()
-    .describe(
-      "Embedding model used to rerank math-search candidates after vector retrieval"
-    ),
   E2B_API_KEY: z.string().optional().describe("E2B API key"),
   E2B_CHAT_TEMPLATE_ID: z
     .string()
@@ -96,24 +91,14 @@ export const serverEnvSchema = {
     .positive()
     .optional()
     .describe("Timeout in milliseconds for Lean sandbox execution"),
-  BACKGROUND_CHAT_E2B: z
+  ENABLE_OTEL_TRACING: z
     .enum(["true", "false"])
     .optional()
-    .describe("Enable authenticated background chat execution via E2B"),
-  AGENT_RUN_LEASE_MS: z.coerce
-    .number()
-    .int()
-    .positive()
+    .describe("Enable OpenTelemetry tracing and Langfuse export"),
+  ENABLE_LANGFUSE_DEEP_RESEARCH_TRACING: z
+    .enum(["true", "false"])
     .optional()
-    .describe(
-      "Lease duration in milliseconds for claimed background chat runs"
-    ),
-  AGENT_RUN_SANDBOX_TIMEOUT_MS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("Timeout in milliseconds for an E2B background chat sandbox"),
+    .describe("Enable Langfuse tracing for deep research runs"),
   ARISTOTLE_API_URL: z
     .string()
     .url()
@@ -200,10 +185,10 @@ export const serverEnvSchema = {
 };
 
 export const clientEnvSchema = {
-  NEXT_PUBLIC_BACKGROUND_CHAT_E2B: z
+  NEXT_PUBLIC_ENABLE_ANALYTICS: z
     .enum(["true", "false"])
     .optional()
-    .describe("Enable authenticated background chat execution in the browser"),
+    .describe("Enable Vercel Analytics and Speed Insights in the browser"),
   NEXT_PUBLIC_LEAN_RUN_ENABLED: z
     .enum(["true", "false"])
     .optional()

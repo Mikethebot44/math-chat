@@ -58,7 +58,7 @@ export function MessageEditor(
     <ChatInputProvider
       initialAttachments={initialAttachments}
       initialInput={initialInput}
-      initialTool={props.message.metadata?.selectedTool}
+      initialTool={props.message.metadata?.selectedTool ?? null}
       key={`edit-${props.message.id}`}
       localStorageEnabled={false}
       overrideModelId={messageSelectedModel || undefined}

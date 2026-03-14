@@ -6,12 +6,8 @@ import {
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { after } from "next/server";
-import { createClient } from "redis";
-import {
-  createResumableStreamContext,
-  type ResumableStreamContext,
-} from "resumable-stream";
 import throttle from "throttleit";
+import { consumePendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import {
   type AppModelDefinition,
   type AppModelId,
@@ -24,7 +20,9 @@ import {
   generateFollowupSuggestions,
   streamFollowupSuggestions,
 } from "@/lib/ai/followup-suggestions";
+import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import { systemPrompt } from "@/lib/ai/prompts";
+import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import { calculateMessagesTokens } from "@/lib/ai/token-utils";
 import { allTools } from "@/lib/ai/tools/tools-definitions";
 import type { ChatMessage, ToolName } from "@/lib/ai/types";
@@ -37,7 +35,6 @@ import { config } from "@/lib/config";
 import { createAnonymousSession } from "@/lib/create-anonymous-session";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
 import { canSpend, deductCredits } from "@/lib/db/credits";
-import { createAgentRun, createCancelledAgentRun } from "@/lib/db/agent-runs";
 import { getMcpConnectorsByUserId } from "@/lib/db/mcp-queries";
 import {
   getChatById,
@@ -48,55 +45,19 @@ import {
   saveChat,
   saveMessage,
   updateMessage,
-  updateMessageCanceledAt,
   updateMessageActiveStreamId,
+  updateMessageCanceledAt,
 } from "@/lib/db/queries";
-import { consumePendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import type { McpConnector } from "@/lib/db/schema";
-import { env } from "@/lib/env";
 import { MAX_INPUT_TOKENS } from "@/lib/limits/tokens";
 import { createModuleLogger } from "@/lib/logger";
-import { isBackgroundChatEnabled } from "@/lib/agent-runs/config";
-import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import type { AnonymousSession } from "@/lib/types/anonymous";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { generateUUID } from "@/lib/utils";
 import { checkAnonymousRateLimit, getClientIP } from "@/lib/utils/rate-limit";
-import { buildRunStatusPart } from "@/lib/agent-runs/run-status";
 import { generateTitleFromUserMessage } from "../../actions";
 import { getThreadUpToMessageId } from "./get-thread-up-to-message-id";
-
-// Shared Redis clients for resumable stream
-let redisPublisher: ReturnType<typeof createClient> | null = null;
-let redisSubscriber: ReturnType<typeof createClient> | null = null;
-
-if (env.REDIS_URL) {
-  redisPublisher = createClient({ url: env.REDIS_URL });
-  redisSubscriber = createClient({ url: env.REDIS_URL });
-  await Promise.all([redisPublisher.connect(), redisSubscriber.connect()]);
-}
-
-let globalStreamContext: ResumableStreamContext | null = null;
-
-export function getStreamContext(): ResumableStreamContext | null {
-  if (globalStreamContext) {
-    return globalStreamContext;
-  }
-
-  // Resumable streams require Redis - return null if not configured
-  if (!(redisPublisher && redisSubscriber)) {
-    return null;
-  }
-
-  globalStreamContext = createResumableStreamContext({
-    waitUntil: after,
-    keyPrefix: `${config.appPrefix}:resumable-stream`,
-    publisher: redisPublisher,
-    subscriber: redisSubscriber,
-  });
-
-  return globalStreamContext;
-}
+import { getStreamContext, getStreamPublisher } from "./stream-context";
 
 function toLoggableError(error: unknown) {
   if (error instanceof Error) {
@@ -115,7 +76,9 @@ type AnonymousSessionResult =
   | { success: true; session: AnonymousSession }
   | { success: false; error: Response };
 
-async function handleAnonymousSession({
+const DEFAULT_ALLOWED_TOOLS: ToolName[] = [...allTools];
+
+async function _handleAnonymousSession({
   request,
   redis,
   selectedModelId,
@@ -274,32 +237,22 @@ async function handleUserValidationAndCredits({
  * MCP tools are handled separately in core-chat-agent.
  */
 function determineAllowedTools({
-  isAnonymous,
   modelDefinition,
   explicitlyRequestedTools,
 }: {
-  isAnonymous: boolean;
   modelDefinition: AppModelDefinition;
   explicitlyRequestedTools: ToolName[] | null;
 }): ToolName[] {
-  // Start with all tools or anonymous-limited tools
-  const allowedTools: ToolName[] = isAnonymous
-    ? [...ANONYMOUS_LIMITS.AVAILABLE_TOOLS]
-    : [...allTools];
-
   // Disable all tools for models with unspecified features
   if (!modelDefinition?.input) {
     return [];
   }
 
-  // If specific tools were requested, filter them against allowed tools
   if (explicitlyRequestedTools && explicitlyRequestedTools.length > 0) {
-    return explicitlyRequestedTools.filter((tool) =>
-      allowedTools.includes(tool)
-    );
+    return explicitlyRequestedTools;
   }
 
-  return allowedTools;
+  return DEFAULT_ALLOWED_TOOLS;
 }
 
 async function getSystemPrompt({
@@ -563,7 +516,7 @@ async function executeChatRequest({
     onChunk,
   });
 
-  const publisher = redisPublisher;
+  const publisher = getStreamPublisher();
   if (publisher) {
     after(async () => {
       try {
@@ -685,7 +638,6 @@ async function prepareRequestContext({
   const log = createModuleLogger("api:chat:prepare");
 
   const allowedTools = determineAllowedTools({
-    isAnonymous,
     modelDefinition,
     explicitlyRequestedTools,
   });
@@ -796,11 +748,13 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedModelId = DEFAULT_SCOUT_MODEL_ID;
+    const selectedTool = userMessage.metadata.selectedTool ?? DEFAULT_CHAT_TOOL;
     const normalizedUserMessage: ChatMessage = {
       ...userMessage,
       metadata: {
         ...userMessage.metadata,
         selectedModel: selectedModelId,
+        selectedTool: selectedTool ?? undefined,
       },
     };
 
@@ -814,9 +768,7 @@ export async function POST(request: NextRequest) {
 
     const { userId, isAnonymous, anonymousSession, modelDefinition } =
       sessionSetup;
-    const backgroundChatEnabled = Boolean(userId) && isBackgroundChatEnabled();
 
-    const selectedTool = normalizedUserMessage.metadata.selectedTool ?? null;
     let isNewChat = false;
 
     // Handle authenticated user validation and credit check
@@ -842,78 +794,19 @@ export async function POST(request: NextRequest) {
     const explicitlyRequestedTools =
       determineExplicitlyRequestedTools(selectedTool);
 
-    const pendingCancellationRequested =
-      userId && backgroundChatEnabled
-        ? await consumePendingMessageCancellation({
-            chatId,
-            messageId: normalizedUserMessage.id,
-            userId,
-          })
-        : false;
+    const pendingCancellationRequested = userId
+      ? await consumePendingMessageCancellation({
+          chatId,
+          messageId: normalizedUserMessage.id,
+          userId,
+        })
+      : false;
 
     if (pendingCancellationRequested) {
       await updateMessageCanceledAt({
         messageId: normalizedUserMessage.id,
         canceledAt: new Date(),
       });
-    }
-
-    if (userId && backgroundChatEnabled) {
-      const assistantMessageId = generateUUID();
-      const queuedAt = new Date().toISOString();
-      const placeholderAssistantMessage: ChatMessage = {
-        id: assistantMessageId,
-        role: "assistant",
-        parts: [
-          buildRunStatusPart({
-            label: pendingCancellationRequested ? "Cancelled" : "Queued...",
-            phase: "queued",
-            startedAt: queuedAt,
-          }),
-        ],
-        metadata: {
-          activeRunId: null,
-          activeStreamId: null,
-          createdAt: new Date(),
-          parentMessageId: normalizedUserMessage.id,
-          selectedModel: selectedModelId,
-          selectedTool: selectedTool ?? undefined,
-        },
-      };
-
-      await saveMessage({
-        id: assistantMessageId,
-        chatId,
-        message: placeholderAssistantMessage,
-      });
-
-      const runFactory = pendingCancellationRequested
-        ? createCancelledAgentRun
-        : createAgentRun;
-      const run = await runFactory({
-        assistantMessageId,
-        chatId,
-        requestedTools: explicitlyRequestedTools,
-        selectedModel: selectedModelId,
-        userId,
-        userMessageId: normalizedUserMessage.id,
-      });
-
-      return Response.json(
-        {
-          assistantMessage: {
-            ...placeholderAssistantMessage,
-            metadata: {
-              ...placeholderAssistantMessage.metadata,
-              activeRunId: pendingCancellationRequested ? null : run.id,
-            },
-          },
-          assistantMessageId,
-          chatId,
-          runId: run.id,
-        },
-        { status: 202 }
-      );
     }
 
     const [contextResult, mcpConnectors] = await Promise.all([

@@ -1,13 +1,24 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { ShimmerText } from "@/components/shimmer-text";
 import { cn } from "@/lib/utils";
 
 interface LoaderProps {
   className?: string;
   label?: string;
+  labelClassName?: string;
+  labelShimmer?: boolean;
+  subtitle?: ReactNode;
 }
 
-export function Loader({ className, label = "Searching..." }: LoaderProps) {
+export function Loader({
+  className,
+  label = "Searching...",
+  labelClassName,
+  labelShimmer = false,
+  subtitle = "Looking across math research papers",
+}: LoaderProps) {
   return (
     <div
       className={cn(
@@ -43,10 +54,22 @@ export function Loader({ className, label = "Searching..." }: LoaderProps) {
       </div>
 
       <div className="space-y-1">
-        <p className="font-medium text-foreground">{label}</p>
-        <p className="text-muted-foreground text-xs">
-          Looking across papers and theorem statements
-        </p>
+        {labelShimmer ? (
+          <ShimmerText
+            className={cn("font-medium text-foreground", labelClassName)}
+            delay={0}
+            duration={1.2}
+          >
+            {label}
+          </ShimmerText>
+        ) : (
+          <p className={cn("font-medium text-foreground", labelClassName)}>
+            {label}
+          </p>
+        )}
+        {subtitle ? (
+          <div className="text-muted-foreground text-xs">{subtitle}</div>
+        ) : null}
       </div>
     </div>
   );

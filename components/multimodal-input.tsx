@@ -25,12 +25,7 @@ import {
 import { ContextBar } from "@/components/context-bar";
 import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
-import { useBackgroundChatConfig } from "@/hooks/use-background-chat-config";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  cancelAgentRun,
-  enqueueAuthenticatedChatMessage,
-} from "@/lib/agent-runs/client";
 import type { AppModelId } from "@/lib/ai/app-model-id";
 import { SCOUT_MODEL_IDS } from "@/lib/ai/scout-models";
 import type { Attachment, ChatMessage } from "@/lib/ai/types";
@@ -40,7 +35,6 @@ import { useChatBusyState, useLastMessageId } from "@/lib/stores/hooks-base";
 import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { cn, generateUUID } from "@/lib/utils";
-import { useChatId } from "@/providers/chat-id-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
@@ -58,8 +52,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { LimitDisplay } from "./upgrade-cta/limit-display";
 import { LoginPrompt } from "./upgrade-cta/login-prompt";
-
-const PROJECT_ROUTE_REGEX = /^\/project\/([^/]+)$/;
 
 /** Derive accept string for images only */
 function getAcceptImages(acceptedTypes: Record<string, string[]>): string {
@@ -89,7 +81,7 @@ function PureMultimodalInput({
   autoFocus = false,
   isEditMode = false,
   parentMessageId,
-  projectId,
+  projectId: _projectId,
   onSendMessage,
 }: {
   chatId: string;
@@ -101,22 +93,17 @@ function PureMultimodalInput({
   projectId?: string;
   onSendMessage?: (message: ChatMessage) => void | Promise<void>;
 }) {
-  const storeApi = useChatStoreApi<ChatMessage>();
   const router = useRouter();
+  const storeApi = useChatStoreApi<ChatMessage>();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const trpc = useTRPC();
-  const { backgroundChatEnabled: useBackgroundChat, isRuntimeConfigResolved } =
-    useBackgroundChatConfig();
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
-  const { confirmChatId } = useChatId();
   const {
-    setError,
-    setMessages,
-    setStatus,
     sendMessage,
+    setMessages,
     stop: stopHelper,
   } = useChatActions<ChatMessage>();
   const lastMessageId = useLastMessageId();
@@ -191,12 +178,6 @@ function PureMultimodalInput({
   const submission = useMemo(():
     | { enabled: false; message: string }
     | { enabled: true } => {
-    if (session?.user && !isRuntimeConfigResolved) {
-      return {
-        enabled: false,
-        message: "Loading chat configuration...",
-      };
-    }
     if (isModelDisallowedForAnonymous) {
       return { enabled: false, message: "Log in to use this model" };
     }
@@ -219,14 +200,7 @@ function PureMultimodalInput({
       };
     }
     return { enabled: true };
-  }, [
-    isBusy,
-    isEmpty,
-    isModelDisallowedForAnonymous,
-    isRuntimeConfigResolved,
-    session?.user,
-    uploadQueue.length,
-  ]);
+  }, [isBusy, isEmpty, isModelDisallowedForAnonymous, uploadQueue.length]);
 
   // Helper function to process and validate files
   const processFiles = useCallback(
@@ -268,34 +242,6 @@ function PureMultimodalInput({
       switchToImageCompatibleModel,
       getModelById,
     ]
-  );
-
-  // Update URL when sending message in new chat or project
-  // Anonymous users stay on / - no URL redirect for them
-  const updateChatUrl = useCallback(
-    (chatIdToAdd: string) => {
-      if (!session?.user) {
-        return;
-      }
-
-      const currentPath = window.location.pathname;
-      if (currentPath === "/") {
-        window.history.pushState({}, "", `/chat/${chatIdToAdd}`);
-        return;
-      }
-
-      // Handle project routes: /project/:projectId -> /project/:projectId/chat/:chatId
-      const projectMatch = currentPath.match(PROJECT_ROUTE_REGEX);
-      if (projectMatch) {
-        const [, projectId] = projectMatch;
-        window.history.pushState(
-          {},
-          "",
-          `/project/${projectId}/chat/${chatIdToAdd}`
-        );
-      }
-    },
-    [session?.user]
   );
 
   // Trim messages in edit mode
@@ -345,8 +291,6 @@ function PureMultimodalInput({
   const coreSubmitLogic = useCallback(() => {
     const input = getInputValue();
 
-    updateChatUrl(chatId);
-
     // Get the appropriate parent message ID
     const effectiveParentMessageId = isEditMode
       ? parentMessageId
@@ -372,7 +316,6 @@ function PureMultimodalInput({
         },
       ],
       metadata: {
-        activeRunId: null,
         createdAt: new Date(),
         parentMessageId: effectiveParentMessageId,
         selectedModel: selectedModelId,
@@ -386,43 +329,7 @@ function PureMultimodalInput({
 
     addMessageToTree(message);
     saveChatMessage({ message, chatId });
-
-    if (useBackgroundChat) {
-      const currentMessages = storeApi.getState().messages;
-      setMessages([...currentMessages, message]);
-      setError(undefined);
-      setStatus("submitted");
-      void enqueueAuthenticatedChatMessage({
-        chatId,
-        message,
-        projectId,
-      })
-        .then((payload) => {
-          confirmChatId(payload.chatId);
-          addMessageToTree(payload.assistantMessage);
-          const nextMessages = storeApi.getState().messages;
-          const hasAssistantPlaceholder = nextMessages.some(
-            (candidate) => candidate.id === payload.assistantMessage.id
-          );
-          if (!hasAssistantPlaceholder) {
-            setMessages([...nextMessages, payload.assistantMessage]);
-          }
-          saveChatMessage({
-            chatId,
-            message: payload.assistantMessage,
-          });
-        })
-        .catch((error) => {
-          console.error(error);
-          setStatus("error");
-          setError(
-            error instanceof Error ? error : new Error("Failed to enqueue chat")
-          );
-          toast.error("Failed to send message");
-        });
-    } else {
-      sendMessage(message);
-    }
+    sendMessage(message);
 
     // Refocus after submit
     if (!isMobile) {
@@ -438,19 +345,12 @@ function PureMultimodalInput({
     getInputValue,
     saveChatMessage,
     parentMessageId,
-    projectId,
     selectedModelId,
     editorRef,
     lastMessageId,
     onSendMessage,
-    confirmChatId,
-    setError,
-    setStatus,
     sendMessage,
-    useBackgroundChat,
-    updateChatUrl,
     trimMessagesInEditMode,
-    storeApi,
   ]);
 
   const submitForm = useCallback(() => {
@@ -649,33 +549,11 @@ function PureMultimodalInput({
   });
 
   const handleStop = useCallback(() => {
-    if (session?.user && useBackgroundChat && lastMessageId) {
-      const lastMessage = storeApi
-        .getState()
-        .getThrottledMessages()
-        .find((message: ChatMessage) => message.id === lastMessageId);
-      const activeRunId = lastMessage?.metadata?.activeRunId;
-      if (activeRunId) {
-        void cancelAgentRun(activeRunId).catch((error) => {
-          console.error(error);
-          toast.error("Failed to cancel background run");
-        });
-      } else {
-        stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
-      }
-    } else if (session?.user && lastMessageId) {
+    if (session?.user && lastMessageId) {
       stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
     }
     stopHelper?.();
-  }, [
-    chatId,
-    lastMessageId,
-    session?.user,
-    stopHelper,
-    stopStreamMutation,
-    storeApi,
-    useBackgroundChat,
-  ]);
+  }, [chatId, lastMessageId, session?.user, stopHelper, stopStreamMutation]);
 
   return (
     <div className="relative">
@@ -766,15 +644,15 @@ function PureMultimodalInput({
             acceptFiles={acceptFiles}
             acceptImages={acceptImages}
             attachmentsEnabled={attachmentsEnabled}
-            fileInputRef={fileInputRef}
-            onStop={handleStop}
-            status={status}
             displayStatus={displayStatus}
+            fileInputRef={fileInputRef}
             hasPendingAristotle={hasPendingAristotle}
-            submission={submission}
-            submitForm={submitForm}
+            onStop={handleStop}
             parentMessageId={parentMessageId}
             selectedModelId={selectedModelId}
+            status={status}
+            submission={submission}
+            submitForm={submitForm}
           />
         </PromptInput>
       </div>

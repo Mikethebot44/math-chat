@@ -30,6 +30,40 @@ export const userCredit = pgTable("UserCredit", {
 
 export type UserCredit = InferSelectModel<typeof userCredit>;
 
+export const creditTopUp = pgTable(
+  "CreditTopUp",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    amountCents: integer("amountCents").notNull(),
+    creditsToAdd: integer("creditsToAdd").notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("initiated"),
+    stripeCheckoutSessionId: text("stripeCheckoutSessionId"),
+    stripePaymentIntentId: text("stripePaymentIntentId"),
+    failureReason: text("failureReason"),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    CreditTopUp_user_id_idx: index("CreditTopUp_user_id_idx").on(t.userId),
+    CreditTopUp_status_idx: index("CreditTopUp_status_idx").on(t.status),
+    CreditTopUp_checkout_session_idx: uniqueIndex(
+      "CreditTopUp_checkout_session_idx"
+    ).on(t.stripeCheckoutSessionId),
+    CreditTopUp_payment_intent_idx: uniqueIndex(
+      "CreditTopUp_payment_intent_idx"
+    ).on(t.stripePaymentIntentId),
+  })
+);
+
+export type CreditTopUp = InferSelectModel<typeof creditTopUp>;
+
 export const userModelPreference = pgTable(
   "UserModelPreference",
   {

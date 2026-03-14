@@ -1,10 +1,9 @@
 "use client";
 
 import { MoreHorizontal } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DeleteProjectDialog } from "@/components/delete-project-dialog";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import {
   type ProjectDetailsData,
   ProjectDetailsDialog,
@@ -22,6 +21,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useRenameProject } from "@/hooks/chat-sync-hooks";
+import { getProjectHref } from "@/lib/chat-routes";
 import type { Project } from "@/lib/db/schema";
 import type { ProjectColorName, ProjectIconName } from "@/lib/project-icons";
 
@@ -36,11 +36,10 @@ export function SidebarProjectItem({
 }) {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const router = useRouter();
 
   const { mutateAsync: renameProject, isPending } = useRenameProject();
 
-  const projectHref = `/project/${project.id}` as const;
+  const projectHref = getProjectHref(project.id);
 
   const handleRename = async (data: ProjectDetailsData) => {
     await renameProject({
@@ -56,17 +55,11 @@ export function SidebarProjectItem({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild className="cursor-pointer" isActive={isActive}>
-        <Link
+        <IntentPrefetchLink
           href={projectHref}
-          onClick={(e) => {
-            if (e.button === 1 || e.ctrlKey || e.metaKey) {
-              return;
-            }
-            e.preventDefault();
-            router.push(projectHref);
+          onNavigate={() => {
             setOpenMobile(false);
           }}
-          prefetch={false}
         >
           <ProjectIcon
             color={project.iconColor as ProjectColorName}
@@ -74,7 +67,7 @@ export function SidebarProjectItem({
             size={16}
           />
           <span>{project.name}</span>
-        </Link>
+        </IntentPrefetchLink>
       </SidebarMenuButton>
 
       <DropdownMenu modal={true}>

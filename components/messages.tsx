@@ -13,9 +13,9 @@ import {
 import type { ChatMessage } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
 import { Greeting } from "./greeting";
+import { AssistantLoader } from "./assistant-loader";
 import { PreviewMessage } from "./message";
 import { ResponseErrorMessage } from "./response-error-message";
-import { ThinkingMessage } from "./thinking-message";
 
 interface PureMessagesInternalProps {
   isReadonly: boolean;
@@ -52,9 +52,7 @@ const PureMessagesInternal = memo(
           />
         ))}
 
-        {isBusy && lastMessage?.role === "user" && (
-          <ThinkingMessage startedAt={lastMessage.metadata.createdAt} />
-        )}
+        {isBusy && lastMessage?.role === "user" && <AssistantLoader />}
 
         {status === "error" && <ResponseErrorMessage />}
       </>

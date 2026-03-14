@@ -1,5 +1,5 @@
 import type { ChatMessage } from "@/lib/ai/types";
-import { AristotleThinkingStatus } from "./aristotle-thinking-status";
+import { AristotleLoader } from "./aristotle-loader";
 
 type AristotleSubmitTool = Extract<
   ChatMessage["parts"][number],
@@ -12,5 +12,5 @@ export function LeanProof({
   messageId: string;
   tool: AristotleSubmitTool;
 }) {
-  return <AristotleThinkingStatus messageId={messageId} tool={tool} />;
+  return <AristotleLoader messageId={messageId} tool={tool} />;
 }

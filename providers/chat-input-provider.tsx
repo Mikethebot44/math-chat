@@ -13,13 +13,9 @@ import React, {
 } from "react";
 import type { LexicalChatInputRef } from "@/components/lexical-chat-input";
 import type { AppModelId } from "@/lib/ai/app-models";
+import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import type { Attachment, UiToolName } from "@/lib/ai/types";
-import { config } from "@/lib/config";
-
-const DEFAULT_CHAT_TOOL: UiToolName | null = config.ai.tools.leanProof.enabled
-  ? "leanProof"
-  : null;
 
 interface ChatInputContextType {
   attachments: Attachment[];
@@ -99,8 +95,8 @@ export function ChatInputProvider({
   // (e.g., submit button `disabled` stuck from server HTML).
   const inputValueRef = useRef<string>(initialInput);
 
-  const [selectedTool, setSelectedTool] = useState<UiToolName | null>(
-    initialTool ?? DEFAULT_CHAT_TOOL
+  const [selectedTool, setSelectedToolState] = useState<UiToolName | null>(
+    initialTool
   );
   const [attachments, setAttachments] =
     useState<Attachment[]>(initialAttachments);
@@ -124,10 +120,15 @@ export function ChatInputProvider({
     return initialInput || getLocalStorageInput();
   }, [initialInput, getLocalStorageInput, localStorageEnabled, hasHydrated]);
 
-  const handleModelChange = useCallback(
-    async (_modelId: AppModelId) => {},
-    []
-  );
+  const handleModelChange = useCallback(async (_modelId: AppModelId) => {
+    // Model switching is currently disabled in this provider.
+  }, []);
+
+  const setSelectedTool = useCallback<
+    Dispatch<SetStateAction<UiToolName | null>>
+  >((value) => {
+    setSelectedToolState(value);
+  }, []);
 
   const clearInput = useCallback(() => {
     editorRef.current?.clear();
@@ -135,10 +136,6 @@ export function ChatInputProvider({
     inputValueRef.current = "";
     setIsEmpty(true);
   }, [setLocalStorageInput]);
-
-  const resetData = useCallback(() => {
-    setSelectedTool(DEFAULT_CHAT_TOOL);
-  }, []);
 
   const clearAttachments = useCallback(() => {
     setAttachments([]);
@@ -172,13 +169,8 @@ export function ChatInputProvider({
       if (!isEditMode) {
         clearInput();
       }
-
-      // deepResearch stays active until the research process completes (handled via DataStreamHandler)
-      if (selectedTool !== "deepResearch") {
-        resetData();
-      }
     },
-    [clearAttachments, clearInput, selectedTool, resetData]
+    [clearAttachments, clearInput]
   );
 
   return (

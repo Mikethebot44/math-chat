@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useCloneChat } from "@/hooks/chat-sync-hooks";
+import { getChatHref } from "@/lib/chat-routes";
 
 interface CloneChatButtonProps {
   chatId: string;
@@ -21,7 +22,7 @@ export function CloneChatButton({ chatId, className }: CloneChatButtonProps) {
         chatId,
       });
 
-      router.push(`/chat/${result.chatId}`);
+      router.push(getChatHref({ chatId: result.chatId }));
       toast.success("Chat saved to your chats!");
     } catch (error) {
       console.error("Failed to clone chat:", error);

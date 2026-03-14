@@ -23,10 +23,10 @@ export async function GET() {
     }
 
     if (!isMathSearchConfigured()) {
-      return NextResponse.json(
-        { error: "Math search is not configured on the server." },
-        { status: 503 }
-      );
+      return NextResponse.json({
+        examples: [],
+        source: "unconfigured",
+      });
     }
 
     return NextResponse.json({

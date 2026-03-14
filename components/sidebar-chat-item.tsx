@@ -1,10 +1,9 @@
 "use client";
 import { MoreHorizontal } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { memo, useState } from "react";
 import { toast } from "sonner";
 import { ChatMenuItems } from "@/components/chat-menu-items";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { ShareDialog } from "@/components/share-button";
 import {
   DropdownMenu,
@@ -17,6 +16,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { getChatHref } from "@/lib/chat-routes";
 import type { UIChat } from "@/lib/types/ui-chat";
 
 const PureSidebarChatItem = ({
@@ -26,7 +26,7 @@ const PureSidebarChatItem = ({
   onRename,
   onPin,
   setOpenMobile,
-  prefetch = false,
+  eagerPrefetch = false,
 }: {
   chat: UIChat;
   isActive: boolean;
@@ -34,13 +34,12 @@ const PureSidebarChatItem = ({
   onRename: (chatId: string, title: string) => void;
   onPin: (chatId: string, isPinned: boolean) => void;
   setOpenMobile: (open: boolean) => void;
-  prefetch?: boolean;
+  eagerPrefetch?: boolean;
 }) => {
-  const chatHref: `/project/${string}/chat/${string}` | `/chat/${string}` =
-    chat.projectId
-      ? `/project/${chat.projectId}/chat/${chat.id}`
-      : `/chat/${chat.id}`;
-  const router = useRouter();
+  const chatHref = getChatHref({
+    chatId: chat.id,
+    projectId: chat.projectId,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(chat.title);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -87,21 +86,15 @@ const PureSidebarChatItem = ({
         </div>
       ) : (
         <SidebarMenuButton asChild isActive={isActive}>
-          <Link
+          <IntentPrefetchLink
+            eagerPrefetch={eagerPrefetch}
             href={chatHref}
-            onClick={(e) => {
-              // Allow middle-click and ctrl+click to open in new tab
-              if (e.button === 1 || e.ctrlKey || e.metaKey) {
-                return;
-              }
-              e.preventDefault();
-              router.push(chatHref);
+            onNavigate={() => {
               setOpenMobile(false);
             }}
-            prefetch={prefetch}
           >
             <span>{chat.title}</span>
-          </Link>
+          </IntentPrefetchLink>
         </SidebarMenuButton>
       )}
 
@@ -147,7 +140,7 @@ export const SidebarChatItem = memo(
     if (prevProps.isActive !== nextProps.isActive) {
       return false;
     }
-    if (prevProps.prefetch !== nextProps.prefetch) {
+    if (prevProps.eagerPrefetch !== nextProps.eagerPrefetch) {
       return false;
     }
     if (prevProps.chat.id !== nextProps.chat.id) {

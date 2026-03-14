@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useGetCredits } from "@/hooks/chat-sync-hooks";
 import authClient from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 import { useSession } from "@/providers/session-provider";
 
 export function SidebarUserNav() {
@@ -38,8 +37,7 @@ export function SidebarUserNav() {
   const { credits } = useGetCredits();
   const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
-  const { isMobile, state } = useSidebar();
-  const isDesktopCollapsed = !isMobile && state === "collapsed";
+  const { isMobile } = useSidebar();
 
   const user = session?.user;
 
@@ -66,30 +64,18 @@ export function SidebarUserNav() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
-              className={cn(
-                "mx-auto data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
-                isDesktopCollapsed &&
-                  "flex flex-col items-center justify-center"
-              )}
+              className="mx-auto data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               size="lg"
             >
               <Avatar
-                className={cn(
-                  "size-8 rounded-lg",
-                  isDesktopCollapsed && "size-6"
-                )}
+                className="size-8 rounded-lg transition-[width,height] duration-150 ease-linear group-data-[menu-text=hidden]:size-6"
               >
                 <AvatarImage alt={displayName} src={avatarImageSrc} />
                 <AvatarFallback className="rounded-lg">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
-              <div
-                className={cn(
-                  "grid flex-1 text-left text-sm leading-tight",
-                  isDesktopCollapsed && "hidden"
-                )}
-              >
+              <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">
                   {user.name || user.email}
                 </span>
@@ -98,9 +84,7 @@ export function SidebarUserNav() {
                   {((credits ?? 0) / 100).toFixed(2)}
                 </span>
               </div>
-              <ChevronsUpDown
-                className={cn("ml-auto size-4", isDesktopCollapsed && "hidden")}
-              />
+              <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

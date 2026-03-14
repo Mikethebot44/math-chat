@@ -100,11 +100,15 @@ export async function createCoreChatAgent({
   const existingBaseActiveTools = budgetAllowedTools.filter(
     (toolName) => toolName in baseTools
   );
-  // 2. Always allow all MCP tools that exist at runtime
+  // 2. Only add MCP tools when tool selection is not explicitly constrained.
   const mcpToolNames = Object.keys(mcpTools);
+  const activeMcpToolNames =
+    explicitlyRequestedTools && explicitlyRequestedTools.length > 0
+      ? []
+      : mcpToolNames;
   // 3. Build the final activeTools list (cast needed because MCP tools are dynamic)
   const activeTools = [
-    ...new Set([...existingBaseActiveTools, ...mcpToolNames]),
+    ...new Set([...existingBaseActiveTools, ...activeMcpToolNames]),
   ];
 
   let toolChoice:

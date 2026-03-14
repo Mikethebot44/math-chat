@@ -8,6 +8,7 @@ import type { Vote } from "@/lib/db/schema";
 import {
   useAristotleLeanDownloadData,
   useAristotleThoughtDurationMs,
+  useMessageHasAristotleContext,
 } from "@/lib/stores/hooks-base";
 import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
@@ -125,13 +126,14 @@ function SelectedModelId({ messageId }: { messageId: string }) {
   const message = useMessageById<ChatMessage>(messageId);
   const leanDownloadData = useAristotleLeanDownloadData(messageId);
   const thoughtDurationMs = useAristotleThoughtDurationMs(messageId);
+  const hasAristotleContext = useMessageHasAristotleContext(messageId);
   const { setArtifact } = useArtifact();
 
   if (typeof thoughtDurationMs === "number") {
     return (
       <div className="ml-2 flex items-center gap-2">
         <span className="font-semibold text-muted-foreground text-sm">
-          Thought for {formatElapsedDuration(thoughtDurationMs)}
+          Reasoned for {formatElapsedDuration(thoughtDurationMs)}
         </span>
         {leanDownloadData ? (
           <Action
@@ -159,6 +161,10 @@ function SelectedModelId({ messageId }: { messageId: string }) {
         ) : null}
       </div>
     );
+  }
+
+  if (hasAristotleContext && !leanDownloadData) {
+    return null;
   }
 
   return message?.metadata?.selectedModel ? (

@@ -21,7 +21,7 @@ const config: ConfigInput = {
   services: {
     hosting: "Vercel",
     aiProviders: ["OpenAI", "Anthropic", "Google"],
-    paymentProcessors: [],
+    paymentProcessors: ["Stripe"],
   },
   features: {
     sandbox: false, // Disables canvas/document tool surfaces and sandbox UI

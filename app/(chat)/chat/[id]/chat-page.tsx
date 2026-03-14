@@ -1,20 +1,21 @@
 "use client";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQueries } from "@tanstack/react-query";
 import { notFound, redirect } from "next/navigation";
 import { ChatSystem } from "@/components/chat-system";
-import {
-  useGetChatByIdQueryOptions,
-  useGetChatMessagesQueryOptions,
-} from "@/hooks/chat-sync-hooks";
+import { Loader } from "@/components/loader";
 import { useChatSystemInitialState } from "@/hooks/use-chat-system-initial-state";
 import { useChatId } from "@/providers/chat-id-provider";
 import { useSession } from "@/providers/session-provider";
+import { useTRPC } from "@/trpc/react";
 
 function ChatPageContent({ chatId }: { chatId: string }) {
-  const getChatByIdQueryOptions = useGetChatByIdQueryOptions(chatId);
-  const { data: chat } = useSuspenseQuery(getChatByIdQueryOptions);
-  const getMessagesByChatIdQueryOptions = useGetChatMessagesQueryOptions();
-  const { data: messages } = useQuery(getMessagesByChatIdQueryOptions);
+  const trpc = useTRPC();
+  const [{ data: chat }, { data: messages }] = useSuspenseQueries({
+    queries: [
+      trpc.chat.getChatById.queryOptions({ chatId }),
+      trpc.chat.getChatMessages.queryOptions({ chatId }),
+    ],
+  });
 
   const { initialMessages, initialTool } = useChatSystemInitialState(messages);
 
@@ -36,13 +37,16 @@ export function ChatPage() {
   const { id, isPersisted } = useChatId();
   const { data: session, isPending } = useSession();
 
-  // Anonymous users can't access persisted chat pages
-  if (isPersisted && !isPending && !session?.user) {
-    redirect("/");
-  }
-
   if (!isPersisted) {
     return notFound();
+  }
+
+  if (!session?.user) {
+    if (isPending) {
+      return <Loader label="Loading chat..." subtitle={null} />;
+    }
+
+    redirect("/");
   }
 
   return <ChatPageContent chatId={id} />;

@@ -3,18 +3,12 @@ import {
   useChatStatus,
   useChatStoreApi,
 } from "@ai-sdk-tools/store";
-import { useQuery } from "@tanstack/react-query";
 import { RefreshCcw } from "lucide-react";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { Action } from "@/components/ai-elements/actions";
-import { enqueueAuthenticatedChatMessage } from "@/lib/agent-runs/client";
 import type { ChatMessage } from "@/lib/ai/types";
 import { useChatBusyState } from "@/lib/stores/hooks-base";
-import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
-import { useChatId } from "@/providers/chat-id-provider";
-import { useSession } from "@/providers/session-provider";
-import { useTRPC } from "@/trpc/react";
 
 export function RetryButton({
   messageId,
@@ -23,22 +17,10 @@ export function RetryButton({
   messageId: string;
   className?: string;
 }) {
-  const { setError, setMessages, setStatus, sendMessage } =
-    useChatActions<ChatMessage>();
+  const { setError, setMessages, sendMessage } = useChatActions<ChatMessage>();
   const chatStore = useChatStoreApi<ChatMessage>();
   const status = useChatStatus();
   const { isBusy } = useChatBusyState();
-  const { id: chatId } = useChatId();
-  const { data: session } = useSession();
-  const trpc = useTRPC();
-  const { data: runtimeConfig } = useQuery({
-    ...trpc.chat.getRuntimeConfig.queryOptions(),
-    enabled: !!session?.user,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  const addMessageToTree = useAddMessageToTree();
-  const useBackgroundChat =
-    !!session?.user && runtimeConfig?.backgroundChatEnabled === true;
 
   const handleRetry = useCallback(() => {
     if (!sendMessage) {
@@ -80,51 +62,11 @@ export function RetryButton({
       },
     };
 
-    if (useBackgroundChat) {
-      setMessages([...currentMessages.slice(0, parentMessageIdx), retriedMessage]);
-      setError(undefined);
-      setStatus("submitted");
-      void enqueueAuthenticatedChatMessage({
-        chatId,
-        message: retriedMessage,
-      })
-        .then((payload) => {
-          addMessageToTree(payload.assistantMessage);
-          const nextMessages = chatStore.getState().messages;
-          const hasAssistantPlaceholder = nextMessages.some(
-            (candidate) => candidate.id === payload.assistantMessage.id
-          );
-          if (!hasAssistantPlaceholder) {
-            setMessages([
-              ...nextMessages,
-              payload.assistantMessage,
-            ] as ChatMessage[]);
-          }
-        })
-        .catch((error) => {
-          console.error(error);
-          setStatus("error");
-          setError(error instanceof Error ? error : new Error("Retry failed"));
-          toast.error("Failed to retry message");
-        });
-    } else {
-      sendMessage(retriedMessage, {});
-    }
+    setError(undefined);
+    sendMessage(retriedMessage, {});
 
     toast.success("Retrying message...");
-  }, [
-    addMessageToTree,
-    chatId,
-    chatStore,
-    messageId,
-    sendMessage,
-    setError,
-    setMessages,
-    setStatus,
-    session?.user,
-    trpc.chat,
-    useBackgroundChat,
-  ]);
+  }, [chatStore, messageId, sendMessage, setError, setMessages]);
 
   if (isBusy || status === "streaming" || status === "submitted") {
     return null;

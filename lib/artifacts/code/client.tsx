@@ -17,6 +17,7 @@ import {
 import { Artifact } from "@/components/create-artifact";
 import { config } from "@/lib/config";
 import { env } from "@/lib/env";
+import { getPyodide } from "@/lib/pyodide/load-pyodide";
 import { generateUUID, getLanguageFromFileName } from "@/lib/utils";
 
 const OUTPUT_HANDLERS = {
@@ -332,11 +333,7 @@ export const codeArtifact = new Artifact<"code", Metadata>({
         }));
 
         try {
-          // Python execution using Pyodide
-          // @ts-expect-error - loadPyodide is not defined
-          const currentPyodideInstance = await globalThis.loadPyodide({
-            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/",
-          });
+          const currentPyodideInstance = await getPyodide();
 
           currentPyodideInstance.setStdout({
             batched: (output: string) => {

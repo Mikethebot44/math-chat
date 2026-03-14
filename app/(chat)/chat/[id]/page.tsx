@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { HydrateClient, prefetch, trpc } from "@/trpc/server";
 import { ChatPage } from "./chat-page";
 
@@ -11,12 +10,11 @@ export default async function ChatPageRoute({
 
   // Prefetch chat metadata only so the page shell can render immediately.
   prefetch(trpc.chat.getChatById.queryOptions({ chatId }));
+  prefetch(trpc.chat.getChatMessages.queryOptions({ chatId }));
 
   return (
     <HydrateClient>
-      <Suspense>
-        <ChatPage />
-      </Suspense>
+      <ChatPage />
     </HydrateClient>
   );
 }

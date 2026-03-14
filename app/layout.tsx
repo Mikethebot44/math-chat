@@ -5,7 +5,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 
 import "./globals.css";
-import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 import iconDark from "@/app/icon-dark.png";
 import iconLight from "@/app/icon-light.png";
@@ -65,6 +64,8 @@ const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
 const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
 const LIGHT_FAVICON = iconLight.src;
 const DARK_FAVICON = iconDark.src;
+const ANALYTICS_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === "true";
 const THEME_HEAD_SCRIPT = `\
 (function() {
   var html = document.documentElement;
@@ -129,23 +130,17 @@ export default async function RootLayout({
         ) : null}
       </head>
       <body className="antialiased">
-        <Script
-          src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
-          strategy="afterInteractive"
-        />
-        <NuqsAdapter>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            disableTransitionOnChange
-            enableSystem
-          >
-            <Toaster position="top-center" />
-            {children}
-          </ThemeProvider>
-        </NuqsAdapter>
-        <Analytics />
-        <SpeedInsights />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          disableTransitionOnChange
+          enableSystem
+        >
+          <Toaster position="top-center" />
+          {children}
+        </ThemeProvider>
+        {ANALYTICS_ENABLED ? <Analytics /> : null}
+        {ANALYTICS_ENABLED ? <SpeedInsights /> : null}
       </body>
     </html>
   );
