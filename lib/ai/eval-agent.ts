@@ -61,9 +61,14 @@ async function executeAgentAndGetOutput({
   >;
 }> {
   const noOpStreamWriter = createNoOpStreamWriter();
+  const userPreferences = userId
+    ? await import("@/lib/db/user-preferences").then(({ getUserPreferences }) =>
+        getUserPreferences({ userId })
+      )
+    : null;
 
   const { result, contextForLLM } = await createCoreChatAgent({
-    system: systemPrompt(),
+    system: systemPrompt({ userPreferences }),
     userMessage,
     previousMessages,
     selectedModelId,

@@ -183,7 +183,6 @@ export async function searchMath(query: string): Promise<MathSearchResult[]> {
   if (!response.ok) {
     console.error("[math-search] Exa search failed", {
       bodyPreview: responseText.slice(0, 500),
-      query,
       status: response.status,
     });
     throw new Error(`Exa paper search failed (${response.status}).`);

@@ -79,7 +79,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!session?.user && anonymousSession) {
+  const shouldChargeAnonymousCredit = !session?.user && !!anonymousSession;
+
+  if (shouldChargeAnonymousCredit && anonymousSession) {
     const rateLimitResult = await checkAnonymousRateLimit(
       getClientIP(request),
       await getRedisClient()
@@ -103,11 +105,6 @@ export async function POST(request: Request) {
         { status: 402, headers: rateLimitResult.headers || {} }
       );
     }
-
-    await setAnonymousSession({
-      ...anonymousSession,
-      remainingCredits: anonymousSession.remainingCredits - 1,
-    });
   }
 
   let sandbox: Sandbox | null = null;
@@ -128,6 +125,13 @@ export async function POST(request: Request) {
     });
 
     await sandbox.setTimeout(getLeanSandboxTimeoutMs());
+
+    if (shouldChargeAnonymousCredit && anonymousSession) {
+      await setAnonymousSession({
+        ...anonymousSession,
+        remainingCredits: anonymousSession.remainingCredits - 1,
+      });
+    }
 
     return NextResponse.json({
       ...result,

@@ -4,6 +4,18 @@ import { env } from "@/lib/env";
 
 let stripeClient: Stripe | null = null;
 
+export function getStripeKeyMode(): "live" | "test" | "unknown" {
+  if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) {
+    return "live";
+  }
+
+  if (env.STRIPE_SECRET_KEY?.startsWith("sk_test_")) {
+    return "test";
+  }
+
+  return "unknown";
+}
+
 export function getStripeClient(): Stripe {
   if (!env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not configured");

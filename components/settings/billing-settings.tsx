@@ -1,22 +1,24 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock3, CreditCard, Loader2, XCircle } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Loader2, XCircle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { MIN_CREDIT_TOP_UP_DOLLARS } from "@/lib/credits/top-up";
+import {
+  isValidTopUpAmountDollars,
+  MIN_CREDIT_TOP_UP_DOLLARS,
+} from "@/lib/credits/top-up";
 import { SettingsPageContent } from "@/components/settings/settings-page";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useTRPC } from "@/trpc/react";
 
 function formatUsd(cents: number) {
@@ -35,33 +37,6 @@ function formatDateTime(value: Date | string | null) {
   return date.toLocaleString();
 }
 
-function getStatusCopy(status: string) {
-  switch (status) {
-    case "completed":
-      return "Completed";
-    case "failed":
-      return "Failed";
-    case "expired":
-      return "Expired";
-    case "pending":
-      return "Pending";
-    default:
-      return "Initiated";
-  }
-}
-
-function getStatusClasses(status: string) {
-  switch (status) {
-    case "completed":
-      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200";
-    case "failed":
-    case "expired":
-      return "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200";
-    default:
-      return "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200";
-  }
-}
-
 export function BillingSettings() {
   const trpc = useTRPC();
   const router = useRouter();
@@ -70,7 +45,8 @@ export function BillingSettings() {
   const [amountDollars, setAmountDollars] = useState(
     String(MIN_CREDIT_TOP_UP_DOLLARS)
   );
-  const handledSessionIdRef = useRef<string | null>(null);
+  const handledCancelRef = useRef(false);
+  const handledOutcomeRef = useRef<string | null>(null);
 
   const overviewQuery = useQuery(trpc.credits.getBillingOverview.queryOptions());
   const checkoutState = searchParams.get("checkout");
@@ -93,15 +69,23 @@ export function BillingSettings() {
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (!status || status === "initiated" || status === "pending") {
-        return 2_000;
+        return 500;
       }
       return false;
     },
   });
 
   const parsedAmount = Number(amountDollars);
-  const isValidAmount =
-    Number.isInteger(parsedAmount) && parsedAmount >= MIN_CREDIT_TOP_UP_DOLLARS;
+  const isValidAmount = isValidTopUpAmountDollars(parsedAmount);
+  const stripeConfigured = overviewQuery.data?.stripeConfigured ?? false;
+
+  const completedPayments = useMemo(
+    () =>
+      (overviewQuery.data?.recentTopUps ?? []).filter(
+        (topUp) => topUp.status === "completed"
+      ),
+    [overviewQuery.data?.recentTopUps]
+  );
 
   const isTerminalStatus =
     topUpStatusQuery.data?.status === "completed" ||
@@ -110,23 +94,38 @@ export function BillingSettings() {
 
   useEffect(() => {
     if (checkoutState !== "cancelled") {
+      handledCancelRef.current = false;
       return;
     }
 
-    toast.message("Stripe Checkout was cancelled");
+    if (handledCancelRef.current) {
+      return;
+    }
+
+    handledCancelRef.current = true;
+    toast.message("Checkout cancelled");
     router.replace("/settings/billing", { scroll: false });
   }, [checkoutState, router]);
 
   useEffect(() => {
     if (!(checkoutState === "success" && sessionId && isTerminalStatus)) {
+      handledOutcomeRef.current = null;
       return;
     }
 
-    if (handledSessionIdRef.current === sessionId) {
+    const outcomeKey = `${sessionId}:${topUpStatusQuery.data?.status ?? "unknown"}`;
+
+    if (handledOutcomeRef.current === outcomeKey) {
       return;
     }
 
-    handledSessionIdRef.current = sessionId;
+    handledOutcomeRef.current = outcomeKey;
+
+    if (topUpStatusQuery.data?.status === "completed") {
+      toast.success(`Added ${formatUsd(topUpStatusQuery.data.amountCents)}`);
+    } else {
+      toast.error("Payment did not complete");
+    }
 
     void Promise.all([
       queryClient.invalidateQueries({
@@ -136,14 +135,9 @@ export function BillingSettings() {
         queryKey: trpc.credits.getBillingOverview.queryKey(),
       }),
     ]).finally(() => {
-      if (topUpStatusQuery.data?.status === "completed") {
-        toast.success(
-          `Added ${formatUsd(topUpStatusQuery.data.creditsToAdd)} in credits`
-        );
-      } else {
-        toast.error("Stripe payment did not complete");
-      }
-      router.replace("/settings/billing", { scroll: false });
+      window.setTimeout(() => {
+        router.replace("/settings/billing", { scroll: false });
+      }, 50);
     });
   }, [
     checkoutState,
@@ -158,7 +152,7 @@ export function BillingSettings() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!isValidAmount || !overviewQuery.data?.stripeConfigured) {
+    if (!isValidAmount || !stripeConfigured) {
       return;
     }
 
@@ -166,156 +160,101 @@ export function BillingSettings() {
   };
 
   return (
-    <SettingsPageContent className="gap-6">
-      {checkoutState === "success" && sessionId ? (
-        <Alert>
-          {topUpStatusQuery.data?.status === "completed" ? (
-            <CheckCircle2 className="size-4" />
-          ) : topUpStatusQuery.data?.status === "failed" ||
-            topUpStatusQuery.data?.status === "expired" ? (
-            <XCircle className="size-4" />
-          ) : (
-            <Clock3 className="size-4" />
-          )}
-          <AlertTitle>Stripe payment status</AlertTitle>
+    <SettingsPageContent className="gap-4">
+      {overviewQuery.isError ? (
+        <Alert variant="destructive">
+          <XCircle className="size-4" />
+          <AlertTitle>Billing could not be loaded</AlertTitle>
           <AlertDescription>
-            {topUpStatusQuery.data?.status === "completed"
-              ? "Your credits were added successfully."
-              : topUpStatusQuery.data?.status === "failed" ||
-                  topUpStatusQuery.data?.status === "expired"
-                ? "The top-up did not complete. Your balance was not changed."
-                : "Waiting for Stripe to confirm the payment and apply credits."}
+            {overviewQuery.error.message || "Try refreshing the page."}
           </AlertDescription>
         </Alert>
       ) : null}
 
-      {!overviewQuery.data?.stripeConfigured ? (
+      {overviewQuery.isSuccess && !stripeConfigured ? (
         <Alert>
-          <CreditCard className="size-4" />
           <AlertTitle>Stripe is not configured</AlertTitle>
           <AlertDescription>
-            Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` before enabling
-            credit purchases.
+            Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`.
           </AlertDescription>
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Current balance</CardTitle>
-            <CardDescription>
-              Credits are stored in cents and spent as you use models.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="font-semibold text-3xl">
-              {formatUsd(overviewQuery.data?.currentCredits ?? 0)}
-            </div>
-            <p className="mt-2 text-muted-foreground text-sm">
-              {overviewQuery.data?.currentCredits ?? 0} credits available
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Add credits</CardTitle>
-            <CardDescription>
-              Minimum ${MIN_CREDIT_TOP_UP_DOLLARS}. Every $1 adds 100 credits.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label className="font-medium text-sm" htmlFor="billing-amount">
-                  Amount to add
-                </label>
-                <Input
-                  id="billing-amount"
-                  inputMode="numeric"
-                  min={MIN_CREDIT_TOP_UP_DOLLARS}
-                  onChange={(event) => setAmountDollars(event.target.value)}
-                  step={1}
-                  type="number"
-                  value={amountDollars}
-                />
-                <p className="text-muted-foreground text-xs">
-                  You will be charged {isValidAmount ? formatUsd(parsedAmount * 100) : "-"}.
-                </p>
-              </div>
-
-              <Button
-                className="w-full"
-                disabled={
-                  !isValidAmount ||
-                  !overviewQuery.data?.stripeConfigured ||
-                  createTopUpMutation.isPending
-                }
-                type="submit"
-              >
-                {createTopUpMutation.isPending ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    Creating Stripe Checkout...
-                  </>
-                ) : (
-                  "Continue to Stripe"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
       <Card>
-        <CardHeader>
-          <CardTitle>Recent top-ups</CardTitle>
-          <CardDescription>
-            Review the latest Stripe credit purchases for this account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {overviewQuery.isLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              Loading recent purchases...
-            </div>
-          ) : overviewQuery.data?.recentTopUps.length ? (
+        <CardContent className="flex flex-col gap-6 pt-2 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-sm">Balance</p>
+            <p className="font-semibold text-4xl">
+              {formatUsd(overviewQuery.data?.currentCredits ?? 0)}
+            </p>
+          </div>
+
+          <form
+            className="flex w-full flex-col gap-3 md:max-w-sm"
+            onSubmit={handleSubmit}
+          >
+            <label className="font-medium text-sm" htmlFor="billing-amount">
+              Add funds
+            </label>
+            <Input
+              id="billing-amount"
+              autoComplete="off"
+              placeholder={MIN_CREDIT_TOP_UP_DOLLARS.toFixed(2)}
+              inputMode="numeric"
+              min={MIN_CREDIT_TOP_UP_DOLLARS}
+              onChange={(event) => setAmountDollars(event.target.value)}
+              step="0.01"
+              type="number"
+              value={amountDollars}
+            />
+            <Button
+              disabled={
+                !isValidAmount || !stripeConfigured || createTopUpMutation.isPending
+              }
+              type="submit"
+            >
+              {createTopUpMutation.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Opening Stripe...
+                </>
+              ) : (
+                `Add ${isValidAmount ? formatUsd(parsedAmount * 100) : ""}`.trim()
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {overviewQuery.isLoading ? (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="size-4 animate-spin" />
+          Loading...
+        </div>
+      ) : completedPayments.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-0">
+            <CardTitle className="text-base">Recent payments</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
             <div className="space-y-3">
-              {overviewQuery.data.recentTopUps.map((topUp) => (
+              {completedPayments.map((topUp) => (
                 <div
-                  className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex items-center justify-between gap-4 border-b pb-3 last:border-b-0 last:pb-0"
                   key={topUp.id}
                 >
-                  <div className="space-y-1">
-                    <p className="font-medium text-sm">
-                      {formatUsd(topUp.amountCents)} for {topUp.creditsToAdd} credits
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      Created {formatDateTime(topUp.createdAt)}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      Completed {formatDateTime(topUp.completedAt)}
+                  <div className="min-w-0">
+                    <p className="font-medium">{formatUsd(topUp.amountCents)}</p>
+                    <p className="text-muted-foreground text-sm">
+                      {formatDateTime(topUp.completedAt ?? topUp.createdAt)}
                     </p>
                   </div>
-                  <span
-                    className={`inline-flex w-fit rounded-full px-2.5 py-1 font-medium text-xs ${getStatusClasses(
-                      topUp.status
-                    )}`}
-                  >
-                    {getStatusCopy(topUp.status)}
-                  </span>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              No Stripe credit purchases yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
     </SettingsPageContent>
   );
 }

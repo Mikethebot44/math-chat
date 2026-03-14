@@ -36,6 +36,40 @@ function getLanguageExtension(language: string): Extension {
   }
 }
 
+const editorLayoutTheme = EditorView.theme({
+  "&": {
+    minWidth: "100%",
+    width: "max-content",
+  },
+  ".cm-scroller": {
+    overflowX: "auto",
+  },
+  ".cm-content": {
+    minWidth: "100%",
+    paddingRight: "2rem",
+    width: "max-content",
+  },
+});
+
+function getEditorExtensions({
+  isReadonly,
+  language,
+  onUpdate,
+}: {
+  isReadonly: boolean | undefined;
+  language: string;
+  onUpdate?: Extension;
+}): Extension[] {
+  return [
+    basicSetup,
+    getLanguageExtension(language),
+    oneDark,
+    editorLayoutTheme,
+    ...(onUpdate ? [onUpdate] : []),
+    EditorView.editable.of(!isReadonly),
+  ];
+}
+
 function PureCodeEditor({
   content,
   onSaveContent,
@@ -50,12 +84,7 @@ function PureCodeEditor({
     if (containerRef.current && !editorRef.current) {
       const startState = EditorState.create({
         doc: content,
-        extensions: [
-          basicSetup,
-          getLanguageExtension(language),
-          oneDark,
-          EditorView.editable.of(!isReadonly),
-        ],
+        extensions: getEditorExtensions({ isReadonly, language }),
       });
 
       editorRef.current = new EditorView({
@@ -93,13 +122,11 @@ function PureCodeEditor({
 
       const newState = EditorState.create({
         doc: editorRef.current.state.doc,
-        extensions: [
-          basicSetup,
-          getLanguageExtension(language),
-          oneDark,
-          updateListener,
-          EditorView.editable.of(!isReadonly),
-        ],
+        extensions: getEditorExtensions({
+          isReadonly,
+          language,
+          onUpdate: updateListener,
+        }),
         selection: currentSelection,
       });
 
@@ -127,7 +154,10 @@ function PureCodeEditor({
   }, [content, status]);
 
   return (
-    <div className="not-prose relative w-full text-sm" ref={containerRef} />
+    <div
+      className="not-prose relative w-full min-w-0 text-sm"
+      ref={containerRef}
+    />
   );
 }
 

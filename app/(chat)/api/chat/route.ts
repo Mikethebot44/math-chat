@@ -14,7 +14,10 @@ import {
   getAppModelDefinition,
 } from "@/lib/ai/app-models";
 import { createCoreChatAgent } from "@/lib/ai/core-chat-agent";
-import { determineExplicitlyRequestedTools } from "@/lib/ai/determine-explicitly-requested-tools";
+import {
+  determineExplicitlyRequestedTools,
+  hasExplicitToolRestriction,
+} from "@/lib/ai/determine-explicitly-requested-tools";
 import { ChatSDKError } from "@/lib/ai/errors";
 import {
   generateFollowupSuggestions,
@@ -48,6 +51,7 @@ import {
   updateMessageActiveStreamId,
   updateMessageCanceledAt,
 } from "@/lib/db/queries";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import type { McpConnector } from "@/lib/db/schema";
 import { MAX_INPUT_TOKENS } from "@/lib/limits/tokens";
 import { createModuleLogger } from "@/lib/logger";
@@ -248,7 +252,7 @@ function determineAllowedTools({
     return [];
   }
 
-  if (explicitlyRequestedTools && explicitlyRequestedTools.length > 0) {
+  if (hasExplicitToolRestriction(explicitlyRequestedTools)) {
     return explicitlyRequestedTools;
   }
 
@@ -258,20 +262,31 @@ function determineAllowedTools({
 async function getSystemPrompt({
   isAnonymous,
   chatId,
+  userId,
 }: {
   isAnonymous: boolean;
   chatId: string;
+  userId: string | null;
 }): Promise<string> {
-  let system = systemPrompt();
-  if (!isAnonymous) {
-    const currentChat = await getChatById({ id: chatId });
-    if (currentChat?.projectId) {
-      const project = await getProjectById({ id: currentChat.projectId });
-      if (project?.instructions) {
-        system = `${system}\n\nProject instructions:\n${project.instructions}`;
-      }
+  const userPreferences =
+    !isAnonymous && userId
+      ? await getUserPreferences({ userId })
+      : null;
+
+  let system = systemPrompt({ userPreferences });
+
+  if (isAnonymous) {
+    return system;
+  }
+
+  const currentChat = await getChatById({ id: chatId });
+  if (currentChat?.projectId) {
+    const project = await getProjectById({ id: currentChat.projectId });
+    if (project?.instructions) {
+      system = `${system}\n\nProject instructions:\n${project.instructions}`;
     }
   }
+
   return system;
 }
 
@@ -309,7 +324,7 @@ async function createChatStream({
   onChunk?: () => void;
 }) {
   const log = createModuleLogger("api:chat:stream");
-  const system = await getSystemPrompt({ isAnonymous, chatId });
+  const system = await getSystemPrompt({ isAnonymous, chatId, userId });
 
   // Create cost accumulator to track all LLM and API costs
   const costAccumulator = new CostAccumulator();

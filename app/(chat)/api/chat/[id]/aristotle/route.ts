@@ -23,6 +23,7 @@ import {
   saveMessage,
   updateMessage,
 } from "@/lib/db/queries";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { buildThreadFromLeaf } from "@/lib/thread-utils";
 import { generateUUID } from "@/lib/utils";
 import { replaceFilePartUrlByBinaryDataInMessages } from "@/lib/utils/download-assets";
@@ -172,10 +173,15 @@ function findExistingContinuationMessage({
 
 async function getSystemPromptForChat({
   chatId,
+  chatOwnerUserId,
 }: {
   chatId: string;
+  chatOwnerUserId: string | null;
 }): Promise<string> {
-  let system = systemPrompt();
+  const userPreferences = chatOwnerUserId
+    ? await getUserPreferences({ userId: chatOwnerUserId })
+    : null;
+  let system = systemPrompt({ userPreferences });
   const chat = await getChatById({ id: chatId });
   if (chat?.projectId) {
     const project = await getProjectById({ id: chat.projectId });
@@ -188,12 +194,14 @@ async function getSystemPromptForChat({
 
 async function generateContinuationMessage({
   chatId,
+  chatOwnerUserId,
   sourceMessage,
   selectedModelId,
   snapshot,
   userId,
 }: {
   chatId: string;
+  chatOwnerUserId: string | null;
   sourceMessage: ChatMessage;
   selectedModelId: AppModelId;
   snapshot: AristotleJobStatusResult;
@@ -247,7 +255,7 @@ async function generateContinuationMessage({
   const [model, providerOptions, system] = await Promise.all([
     getLanguageModel(selectedModelId),
     getModelProviderOptions(selectedModelId),
-    getSystemPromptForChat({ chatId }),
+    getSystemPromptForChat({ chatId, chatOwnerUserId }),
   ]);
 
   const result = await generateText({
@@ -373,6 +381,7 @@ export async function POST(
   const selectedModelId = DEFAULT_SCOUT_MODEL_ID as AppModelId;
   const continuationMessage = await generateContinuationMessage({
     chatId,
+    chatOwnerUserId: chat.userId,
     sourceMessage: updatedSourceMessage,
     selectedModelId,
     snapshot,

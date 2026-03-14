@@ -5,9 +5,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 
 import "./globals.css";
-import { Toaster } from "sonner";
 import iconDark from "@/app/icon-dark.png";
 import iconLight from "@/app/icon-light.png";
+import { AppToaster } from "@/components/app-toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { config } from "@/lib/config";
 
@@ -64,8 +64,7 @@ const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
 const DARK_THEME_COLOR = "hsl(240deg 10% 3.92%)";
 const LIGHT_FAVICON = iconLight.src;
 const DARK_FAVICON = iconDark.src;
-const ANALYTICS_ENABLED =
-  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === "true";
+const ANALYTICS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === "true";
 const THEME_HEAD_SCRIPT = `\
 (function() {
   var html = document.documentElement;
@@ -136,7 +135,7 @@ export default async function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <Toaster position="top-center" />
+          <AppToaster />
           {children}
         </ThemeProvider>
         {ANALYTICS_ENABLED ? <Analytics /> : null}

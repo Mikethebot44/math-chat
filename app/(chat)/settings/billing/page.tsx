@@ -13,10 +13,7 @@ export default async function BillingSettingsPage() {
     <HydrateClient>
       <SettingsPage>
         <SettingsPageHeader>
-          <h2 className="font-semibold text-lg">Billing & Credits</h2>
-          <p className="text-muted-foreground text-sm">
-            Top up credits with Stripe Checkout and review your recent purchases.
-          </p>
+          <h2 className="font-semibold text-lg">Billing</h2>
         </SettingsPageHeader>
         <BillingSettings />
       </SettingsPage>

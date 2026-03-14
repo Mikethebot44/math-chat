@@ -1,6 +1,9 @@
 import type Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { processStripeWebhookEvent } from "./webhook";
+import {
+  processStripeWebhookEvent,
+  reconcileStripeCheckoutSession,
+} from "./webhook";
 
 const creditsDb = vi.hoisted(() => ({
   getCreditTopUpByIdOrStripeSessionId: vi.fn(),
@@ -14,9 +17,21 @@ const logger = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
+const stripeClient = vi.hoisted(() => ({
+  checkout: {
+    sessions: {
+      retrieve: vi.fn(),
+    },
+  },
+}));
+
 vi.mock("@/lib/db/credits", () => creditsDb);
 vi.mock("@/lib/logger", () => ({
   createModuleLogger: () => logger,
+}));
+vi.mock("@/lib/stripe/server", () => ({
+  getStripeKeyMode: () => "test",
+  getStripeClient: () => stripeClient,
 }));
 
 function createCheckoutSession(
@@ -54,6 +69,7 @@ function createEvent(
 describe("processStripeWebhookEvent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("completes and credits a matching checkout session", async () => {
@@ -175,5 +191,78 @@ describe("processStripeWebhookEvent", () => {
       stripeCheckoutSessionId: "cs_test_123",
       stripePaymentIntentId: "pi_123",
     });
+  });
+
+  it("reconciles a paid checkout session directly from Stripe", async () => {
+    creditsDb.getCreditTopUpByIdOrStripeSessionId.mockResolvedValue({
+      amountCents: 500,
+      id: "topup-1",
+      userId: "user-1",
+    });
+    stripeClient.checkout.sessions.retrieve.mockResolvedValue(
+      createCheckoutSession({
+        payment_status: "paid",
+        status: "complete",
+      })
+    );
+
+    await reconcileStripeCheckoutSession("cs_test_123");
+
+    expect(stripeClient.checkout.sessions.retrieve).toHaveBeenCalledWith(
+      "cs_test_123"
+    );
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).toHaveBeenCalledWith({
+      creditTopUpId: "topup-1",
+      stripeCheckoutSessionId: "cs_test_123",
+      stripePaymentIntentId: "pi_123",
+    });
+  });
+
+  it("leaves missing checkout sessions pending during reconciliation", async () => {
+    stripeClient.checkout.sessions.retrieve.mockRejectedValue({
+      code: "resource_missing",
+    });
+
+    await expect(
+      reconcileStripeCheckoutSession("cs_live_missing")
+    ).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        keyMode: "test",
+        sessionId: "cs_live_missing",
+        sessionMode: "live",
+      },
+      "Stripe checkout session could not be retrieved during reconciliation; leaving top-up pending for future retries"
+    );
+    expect(creditsDb.markCreditTopUpFailed).not.toHaveBeenCalled();
+  });
+
+  it("warns when reconciliation exhausts retries without a terminal session state", async () => {
+    vi.useFakeTimers();
+    stripeClient.checkout.sessions.retrieve.mockResolvedValue(
+      createCheckoutSession({
+        payment_status: "unpaid",
+        status: "open",
+      })
+    );
+
+    const reconciliation = reconcileStripeCheckoutSession("cs_test_123");
+    await vi.runAllTimersAsync();
+    await reconciliation;
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        paymentStatus: "unpaid",
+        sessionId: "cs_test_123",
+        status: "open",
+      },
+      "Stripe checkout session reconciliation reached retry limit without a terminal state"
+    );
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).not.toHaveBeenCalled();
   });
 });

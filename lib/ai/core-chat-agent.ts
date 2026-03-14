@@ -8,6 +8,7 @@ import { addExplicitToolRequestToMessages } from "@/app/(chat)/api/chat/add-expl
 import { filterPartsForLLM } from "@/app/(chat)/api/chat/filter-reasoning-parts";
 import { getRecentGeneratedImage } from "@/app/(chat)/api/chat/get-recent-generated-image";
 import { type AppModelId, getAppModelDefinition } from "@/lib/ai/app-models";
+import { hasExplicitToolRestriction } from "@/lib/ai/determine-explicitly-requested-tools";
 import { markdownJoinerTransform } from "@/lib/ai/markdown-joiner-transform";
 import { getLanguageModel, getModelProviderOptions } from "@/lib/ai/providers";
 import { getMcpTools, getTools } from "@/lib/ai/tools/tools";
@@ -103,7 +104,7 @@ export async function createCoreChatAgent({
   // 2. Only add MCP tools when tool selection is not explicitly constrained.
   const mcpToolNames = Object.keys(mcpTools);
   const activeMcpToolNames =
-    explicitlyRequestedTools && explicitlyRequestedTools.length > 0
+    hasExplicitToolRestriction(explicitlyRequestedTools)
       ? []
       : mcpToolNames;
   // 3. Build the final activeTools list (cast needed because MCP tools are dynamic)
