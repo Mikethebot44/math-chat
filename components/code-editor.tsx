@@ -42,7 +42,7 @@ const editorLayoutTheme = EditorView.theme({
     width: "max-content",
   },
   ".cm-scroller": {
-    overflowX: "hidden",
+    overflowX: "auto",
   },
   ".cm-content": {
     minWidth: "100%",

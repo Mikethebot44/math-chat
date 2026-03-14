@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ai = vi.hoisted(() => ({
@@ -37,6 +38,13 @@ const userPreferencesDb = vi.hoisted(() => ({
   getUserPreferences: vi.fn(),
 }));
 
+const prompts = vi.hoisted(() => ({
+  systemPrompt: vi.fn(
+    ({ userPreferences }: { userPreferences?: { preferredName?: string } | null }) =>
+      `system prompt for ${userPreferences?.preferredName ?? "nobody"}`
+  ),
+}));
+
 const generateUUID = vi.hoisted(() => vi.fn());
 
 vi.mock("ai", () => ai);
@@ -46,9 +54,7 @@ vi.mock("next/headers", () => ({
 vi.mock("@/app/(chat)/api/chat/filter-reasoning-parts", () => ({
   filterPartsForLLM: vi.fn((messages) => messages),
 }));
-vi.mock("@/lib/ai/prompts", () => ({
-  systemPrompt: vi.fn(() => "system prompt"),
-}));
+vi.mock("@/lib/ai/prompts", () => prompts);
 vi.mock("@/lib/ai/providers", () => ({
   getLanguageModel: vi.fn(async () => "model"),
   getModelProviderOptions: vi.fn(async () => ({})),
@@ -114,7 +120,7 @@ describe("POST /api/chat/[id]/aristotle", () => {
     dbQueries.updateMessage.mockResolvedValue(undefined);
   });
 
-  it("builds the continuation prompt with the acting viewer's preferences", async () => {
+  it("builds the continuation prompt with the chat owner's preferences", async () => {
     const sourceMessage = {
       id: "message-1",
       metadata: {
@@ -142,14 +148,14 @@ describe("POST /api/chat/[id]/aristotle", () => {
     });
     dbQueries.getAllMessagesByChatId.mockResolvedValue([sourceMessage]);
     userPreferencesDb.getUserPreferences.mockImplementation(async ({ userId }) => {
-      if (userId !== "viewer-1") {
+      if (userId !== "owner-1") {
         throw new Error(`unexpected user preferences lookup for ${userId}`);
       }
 
       return {
         additionalContext: null,
         occupation: null,
-        preferredName: "Viewer",
+        preferredName: "Owner",
       };
     });
 
@@ -160,16 +166,28 @@ describe("POST /api/chat/[id]/aristotle", () => {
           "Content-Type": "application/json",
         },
         method: "POST",
-      }),
+      }) as NextRequest,
       { params: Promise.resolve({ id: "chat-1" }) }
     );
 
     expect(response.status).toBe(200);
     expect(userPreferencesDb.getUserPreferences).toHaveBeenCalledWith({
-      userId: "viewer-1",
-    });
-    expect(userPreferencesDb.getUserPreferences).not.toHaveBeenCalledWith({
       userId: "owner-1",
     });
+    expect(userPreferencesDb.getUserPreferences).not.toHaveBeenCalledWith({
+      userId: "viewer-1",
+    });
+    expect(prompts.systemPrompt).toHaveBeenCalledWith({
+      userPreferences: {
+        additionalContext: null,
+        occupation: null,
+        preferredName: "Owner",
+      },
+    });
+    expect(ai.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: "system prompt for Owner",
+      })
+    );
   });
 });

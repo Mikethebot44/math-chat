@@ -35,7 +35,7 @@ export function determineExplicitlyRequestedTools(
   }
   if (selectedTool === "createTextDocument") {
     if (!config.features.sandbox) {
-      return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
+      return [];
     }
     return [
       "createTextDocument",

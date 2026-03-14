@@ -173,12 +173,14 @@ function findExistingContinuationMessage({
 
 async function getSystemPromptForChat({
   chatId,
-  userId,
+  chatOwnerUserId,
 }: {
   chatId: string;
-  userId: string | null;
+  chatOwnerUserId: string | null;
 }): Promise<string> {
-  const userPreferences = userId ? await getUserPreferences({ userId }) : null;
+  const userPreferences = chatOwnerUserId
+    ? await getUserPreferences({ userId: chatOwnerUserId })
+    : null;
   let system = systemPrompt({ userPreferences });
   const chat = await getChatById({ id: chatId });
   if (chat?.projectId) {
@@ -192,12 +194,14 @@ async function getSystemPromptForChat({
 
 async function generateContinuationMessage({
   chatId,
+  chatOwnerUserId,
   sourceMessage,
   selectedModelId,
   snapshot,
   userId,
 }: {
   chatId: string;
+  chatOwnerUserId: string | null;
   sourceMessage: ChatMessage;
   selectedModelId: AppModelId;
   snapshot: AristotleJobStatusResult;
@@ -251,7 +255,7 @@ async function generateContinuationMessage({
   const [model, providerOptions, system] = await Promise.all([
     getLanguageModel(selectedModelId),
     getModelProviderOptions(selectedModelId),
-    getSystemPromptForChat({ chatId, userId }),
+    getSystemPromptForChat({ chatId, chatOwnerUserId }),
   ]);
 
   const result = await generateText({
@@ -377,6 +381,7 @@ export async function POST(
   const selectedModelId = DEFAULT_SCOUT_MODEL_ID as AppModelId;
   const continuationMessage = await generateContinuationMessage({
     chatId,
+    chatOwnerUserId: chat.userId,
     sourceMessage: updatedSourceMessage,
     selectedModelId,
     snapshot,

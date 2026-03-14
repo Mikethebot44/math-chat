@@ -86,6 +86,14 @@ export async function reconcileStripeCheckoutSession(
     }
 
     if (attempt === 2) {
+      log.warn(
+        {
+          paymentStatus: session.payment_status,
+          sessionId,
+          status: session.status,
+        },
+        "Stripe checkout session reconciliation reached retry limit without a terminal state"
+      );
       return;
     }
 

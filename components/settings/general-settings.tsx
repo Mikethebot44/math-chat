@@ -25,10 +25,16 @@ function countLabel(current: number, max: number) {
   return `${current}/${max}`;
 }
 
+function arePreferencesEqual(left: UserPreferences, right: UserPreferences) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function GeneralSettings() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const hydratedRef = useRef(false);
+  const lastSyncedPreferencesRef = useRef<UserPreferences>(
+    emptyUserPreferences
+  );
 
   const [form, setForm] = useState<UserPreferences>(emptyUserPreferences);
   const [traitInput, setTraitInput] = useState("");
@@ -37,19 +43,28 @@ export function GeneralSettings() {
     trpc.settings.getGeneralPreferences.queryOptions()
   );
 
-  useEffect(() => {
-    if (!preferencesQuery.data || hydratedRef.current) {
-      return;
-    }
-
-    setForm(preferencesQuery.data);
-    hydratedRef.current = true;
-  }, [preferencesQuery.data]);
-
   const normalizedForm = useMemo(() => normalizeUserPreferences(form), [form]);
-  const savedPreferences = preferencesQuery.data ?? emptyUserPreferences;
-  const isDirty =
-    JSON.stringify(normalizedForm) !== JSON.stringify(savedPreferences);
+  const savedPreferences = useMemo(
+    () => normalizeUserPreferences(preferencesQuery.data ?? emptyUserPreferences),
+    [preferencesQuery.data]
+  );
+
+  useEffect(() => {
+    setForm((current) => {
+      const previousSavedPreferences = lastSyncedPreferencesRef.current;
+      const normalizedCurrent = normalizeUserPreferences(current);
+
+      lastSyncedPreferencesRef.current = savedPreferences;
+
+      if (!arePreferencesEqual(normalizedCurrent, previousSavedPreferences)) {
+        return current;
+      }
+
+      return savedPreferences;
+    });
+  }, [savedPreferences]);
+
+  const isDirty = !arePreferencesEqual(normalizedForm, savedPreferences);
 
   const savePreferencesMutation = useMutation(
     trpc.settings.updateGeneralPreferences.mutationOptions({
@@ -61,7 +76,6 @@ export function GeneralSettings() {
           trpc.settings.getGeneralPreferences.queryKey(),
           preferences
         );
-        setForm(preferences);
         setTraitInput("");
         toast.success("Preferences saved");
       },

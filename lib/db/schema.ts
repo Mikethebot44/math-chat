@@ -108,10 +108,7 @@ export const userPreference = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-  },
-  (t) => ({
-    UserPreference_user_id_idx: index("UserPreference_user_id_idx").on(t.userId),
-  })
+  }
 );
 
 export type UserPreference = InferSelectModel<typeof userPreference>;

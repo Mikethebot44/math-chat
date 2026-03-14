@@ -69,6 +69,7 @@ function createEvent(
 describe("processStripeWebhookEvent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it("completes and credits a matching checkout session", async () => {
@@ -240,5 +241,31 @@ describe("processStripeWebhookEvent", () => {
       failureReason: "stripe_checkout_session_missing",
       stripeCheckoutSessionId: "cs_live_missing",
     });
+  });
+
+  it("warns when reconciliation exhausts retries without a terminal session state", async () => {
+    vi.useFakeTimers();
+    stripeClient.checkout.sessions.retrieve.mockResolvedValue(
+      createCheckoutSession({
+        payment_status: "unpaid",
+        status: "open",
+      })
+    );
+
+    const reconciliation = reconcileStripeCheckoutSession("cs_test_123");
+    await vi.runAllTimersAsync();
+    await reconciliation;
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        paymentStatus: "unpaid",
+        sessionId: "cs_test_123",
+        status: "open",
+      },
+      "Stripe checkout session reconciliation reached retry limit without a terminal state"
+    );
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).not.toHaveBeenCalled();
   });
 });

@@ -42,11 +42,8 @@ describe("determineExplicitlyRequestedTools", () => {
     );
   });
 
-  it("keeps disabled document requests on the always-on tool budget", () => {
-    expect(determineExplicitlyRequestedTools("createTextDocument")).toEqual([
-      "leanProof",
-      "aristotleCheckJob",
-    ]);
+  it("disables tools entirely when document creation is unavailable", () => {
+    expect(determineExplicitlyRequestedTools("createTextDocument")).toEqual([]);
   });
 
   it("keeps empty explicit restrictions distinct from no explicit selection", () => {
