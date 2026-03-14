@@ -34,7 +34,11 @@ function ChatThreadSync({
       />
       {withHandler ? <AristotleContinuationManager chatId={id} /> : null}
       {withHandler ? (
-        <DataStreamHandler id={id} key={`stream:${id}:${threadEpoch}`} />
+        <DataStreamHandler
+          id={id}
+          key={`stream:${id}:${threadEpoch}`}
+          projectId={projectId}
+        />
       ) : null}
     </>
   );

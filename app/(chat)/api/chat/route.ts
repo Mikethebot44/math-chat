@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { after } from "next/server";
 import throttle from "throttleit";
+import { consumePendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import {
   type AppModelDefinition,
   type AppModelId,
@@ -19,12 +20,11 @@ import {
   generateFollowupSuggestions,
   streamFollowupSuggestions,
 } from "@/lib/ai/followup-suggestions";
-import {
-  ALWAYS_ENABLED_MATH_AGENT_TOOLS,
-  DEFAULT_CHAT_TOOL,
-} from "@/lib/ai/math-agent";
+import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import { systemPrompt } from "@/lib/ai/prompts";
+import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import { calculateMessagesTokens } from "@/lib/ai/token-utils";
+import { allTools } from "@/lib/ai/tools/tools-definitions";
 import type { ChatMessage, ToolName } from "@/lib/ai/types";
 import {
   getAnonymousSession,
@@ -45,15 +45,12 @@ import {
   saveChat,
   saveMessage,
   updateMessage,
-  updateMessageCanceledAt,
   updateMessageActiveStreamId,
+  updateMessageCanceledAt,
 } from "@/lib/db/queries";
-import { consumePendingMessageCancellation } from "@/lib/agent-runs/pending-message-cancellations";
 import type { McpConnector } from "@/lib/db/schema";
-import { env } from "@/lib/env";
 import { MAX_INPUT_TOKENS } from "@/lib/limits/tokens";
 import { createModuleLogger } from "@/lib/logger";
-import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 import type { AnonymousSession } from "@/lib/types/anonymous";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { generateUUID } from "@/lib/utils";
@@ -79,7 +76,9 @@ type AnonymousSessionResult =
   | { success: true; session: AnonymousSession }
   | { success: false; error: Response };
 
-async function handleAnonymousSession({
+const DEFAULT_ALLOWED_TOOLS: ToolName[] = [...allTools];
+
+async function _handleAnonymousSession({
   request,
   redis,
   selectedModelId,
@@ -249,14 +248,11 @@ function determineAllowedTools({
     return [];
   }
 
-  // If specific tools were requested, filter them against allowed tools
   if (explicitlyRequestedTools && explicitlyRequestedTools.length > 0) {
-    return explicitlyRequestedTools.filter((tool) =>
-      ALWAYS_ENABLED_MATH_AGENT_TOOLS.includes(tool)
-    );
+    return explicitlyRequestedTools;
   }
 
-  return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
+  return DEFAULT_ALLOWED_TOOLS;
 }
 
 async function getSystemPrompt({
@@ -752,7 +748,7 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedModelId = DEFAULT_SCOUT_MODEL_ID;
-    const selectedTool = DEFAULT_CHAT_TOOL;
+    const selectedTool = userMessage.metadata.selectedTool ?? DEFAULT_CHAT_TOOL;
     const normalizedUserMessage: ChatMessage = {
       ...userMessage,
       metadata: {
@@ -798,14 +794,13 @@ export async function POST(request: NextRequest) {
     const explicitlyRequestedTools =
       determineExplicitlyRequestedTools(selectedTool);
 
-    const pendingCancellationRequested =
-      userId
-        ? await consumePendingMessageCancellation({
-            chatId,
-            messageId: normalizedUserMessage.id,
-            userId,
-          })
-        : false;
+    const pendingCancellationRequested = userId
+      ? await consumePendingMessageCancellation({
+          chatId,
+          messageId: normalizedUserMessage.id,
+          userId,
+        })
+      : false;
 
     if (pendingCancellationRequested) {
       await updateMessageCanceledAt({

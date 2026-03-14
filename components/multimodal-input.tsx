@@ -8,7 +8,6 @@ import type React from "react";
 import {
   type ChangeEvent,
   memo,
-  startTransition,
   useCallback,
   useMemo,
   useRef,
@@ -28,7 +27,6 @@ import { useSaveMessageMutation } from "@/hooks/chat-sync-hooks";
 import { useArtifact } from "@/hooks/use-artifact";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { AppModelId } from "@/lib/ai/app-model-id";
-import { getChatHref } from "@/lib/chat-routes";
 import { SCOUT_MODEL_IDS } from "@/lib/ai/scout-models";
 import type { Attachment, ChatMessage } from "@/lib/ai/types";
 import { config } from "@/lib/config";
@@ -37,7 +35,6 @@ import { useChatBusyState, useLastMessageId } from "@/lib/stores/hooks-base";
 import { useAddMessageToTree } from "@/lib/stores/hooks-threads";
 import { ANONYMOUS_LIMITS } from "@/lib/types/anonymous";
 import { cn, generateUUID } from "@/lib/utils";
-import { useChatId } from "@/providers/chat-id-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
@@ -55,6 +52,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { LimitDisplay } from "./upgrade-cta/limit-display";
 import { LoginPrompt } from "./upgrade-cta/login-prompt";
+
 /** Derive accept string for images only */
 function getAcceptImages(acceptedTypes: Record<string, string[]>): string {
   return Object.entries(acceptedTypes)
@@ -83,7 +81,7 @@ function PureMultimodalInput({
   autoFocus = false,
   isEditMode = false,
   parentMessageId,
-  projectId,
+  projectId: _projectId,
   onSendMessage,
 }: {
   chatId: string;
@@ -99,13 +97,15 @@ function PureMultimodalInput({
   const storeApi = useChatStoreApi<ChatMessage>();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
-  const { isPersisted } = useChatId();
   const trpc = useTRPC();
   const isMobile = useIsMobile();
   const { mutate: saveChatMessage } = useSaveMessageMutation();
   const addMessageToTree = useAddMessageToTree();
-  const { sendMessage, setMessages, stop: stopHelper } =
-    useChatActions<ChatMessage>();
+  const {
+    sendMessage,
+    setMessages,
+    stop: stopHelper,
+  } = useChatActions<ChatMessage>();
   const lastMessageId = useLastMessageId();
   const { displayStatus, hasPendingAristotle, isBusy } = useChatBusyState();
   const {
@@ -200,12 +200,7 @@ function PureMultimodalInput({
       };
     }
     return { enabled: true };
-  }, [
-    isBusy,
-    isEmpty,
-    isModelDisallowedForAnonymous,
-    uploadQueue.length,
-  ]);
+  }, [isBusy, isEmpty, isModelDisallowedForAnonymous, uploadQueue.length]);
 
   // Helper function to process and validate files
   const processFiles = useCallback(
@@ -247,27 +242,6 @@ function PureMultimodalInput({
       switchToImageCompatibleModel,
       getModelById,
     ]
-  );
-
-  // Update URL when sending message in new chat or project
-  // Anonymous users stay on / - no URL redirect for them
-  const updateChatUrl = useCallback(
-    (chatIdToAdd: string) => {
-      if (!(session?.user && !isPersisted)) {
-        return;
-      }
-
-      const chatHref = getChatHref({
-        chatId: chatIdToAdd,
-        projectId: projectId ?? null,
-      });
-
-      startTransition(() => {
-        router.prefetch(chatHref);
-        router.replace(chatHref);
-      });
-    },
-    [isPersisted, projectId, router, session?.user]
   );
 
   // Trim messages in edit mode
@@ -316,8 +290,6 @@ function PureMultimodalInput({
 
   const coreSubmitLogic = useCallback(() => {
     const input = getInputValue();
-
-    updateChatUrl(chatId);
 
     // Get the appropriate parent message ID
     const effectiveParentMessageId = isEditMode
@@ -378,7 +350,6 @@ function PureMultimodalInput({
     lastMessageId,
     onSendMessage,
     sendMessage,
-    updateChatUrl,
     trimMessagesInEditMode,
   ]);
 
@@ -582,13 +553,7 @@ function PureMultimodalInput({
       stopStreamMutation.mutate({ chatId, messageId: lastMessageId });
     }
     stopHelper?.();
-  }, [
-    chatId,
-    lastMessageId,
-    session?.user,
-    stopHelper,
-    stopStreamMutation,
-  ]);
+  }, [chatId, lastMessageId, session?.user, stopHelper, stopStreamMutation]);
 
   return (
     <div className="relative">
@@ -679,15 +644,15 @@ function PureMultimodalInput({
             acceptFiles={acceptFiles}
             acceptImages={acceptImages}
             attachmentsEnabled={attachmentsEnabled}
-            fileInputRef={fileInputRef}
-            onStop={handleStop}
-            status={status}
             displayStatus={displayStatus}
+            fileInputRef={fileInputRef}
             hasPendingAristotle={hasPendingAristotle}
-            submission={submission}
-            submitForm={submitForm}
+            onStop={handleStop}
             parentMessageId={parentMessageId}
             selectedModelId={selectedModelId}
+            status={status}
+            submission={submission}
+            submitForm={submitForm}
           />
         </PromptInput>
       </div>

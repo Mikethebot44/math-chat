@@ -50,7 +50,7 @@ interface ChatInputProviderProps {
 export function ChatInputProvider({
   children,
   initialInput = "",
-  initialTool: _initialTool = DEFAULT_CHAT_TOOL,
+  initialTool = DEFAULT_CHAT_TOOL,
   initialAttachments = [],
   overrideModelId: _overrideModelId,
   localStorageEnabled = true,
@@ -95,8 +95,9 @@ export function ChatInputProvider({
   // (e.g., submit button `disabled` stuck from server HTML).
   const inputValueRef = useRef<string>(initialInput);
 
-  const [selectedTool, setSelectedToolState] =
-    useState<UiToolName | null>(DEFAULT_CHAT_TOOL);
+  const [selectedTool, setSelectedToolState] = useState<UiToolName | null>(
+    initialTool
+  );
   const [attachments, setAttachments] =
     useState<Attachment[]>(initialAttachments);
 
@@ -125,8 +126,8 @@ export function ChatInputProvider({
 
   const setSelectedTool = useCallback<
     Dispatch<SetStateAction<UiToolName | null>>
-  >(() => {
-    setSelectedToolState(DEFAULT_CHAT_TOOL);
+  >((value) => {
+    setSelectedToolState(value);
   }, []);
 
   const clearInput = useCallback(() => {

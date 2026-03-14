@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import type Stripe from "stripe";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { processStripeWebhookEvent } from "./webhook";
 
 const creditsDb = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const creditsDb = vi.hoisted(() => ({
 
 const logger = vi.hoisted(() => ({
   error: vi.fn(),
+  warn: vi.fn(),
 }));
 
 vi.mock("@/lib/db/credits", () => creditsDb);
@@ -30,6 +31,7 @@ function createCheckoutSession(
       userId: "user-1",
     },
     object: "checkout.session",
+    payment_status: "paid",
     payment_intent: "pi_123",
     ...overrides,
   } as Stripe.Checkout.Session;
@@ -65,7 +67,9 @@ describe("processStripeWebhookEvent", () => {
       createEvent("checkout.session.completed", createCheckoutSession())
     );
 
-    expect(creditsDb.markCreditTopUpCompletedAndAddCredits).toHaveBeenCalledWith({
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).toHaveBeenCalledWith({
       creditTopUpId: "topup-1",
       stripeCheckoutSessionId: "cs_test_123",
       stripePaymentIntentId: "pi_123",
@@ -92,7 +96,36 @@ describe("processStripeWebhookEvent", () => {
       failureReason: "stripe_amount_mismatch",
       stripeCheckoutSessionId: "cs_test_123",
     });
-    expect(creditsDb.markCreditTopUpCompletedAndAddCredits).not.toHaveBeenCalled();
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).not.toHaveBeenCalled();
+  });
+
+  it("does not credit an unpaid completed checkout session", async () => {
+    creditsDb.getCreditTopUpByIdOrStripeSessionId.mockResolvedValue({
+      amountCents: 500,
+      id: "topup-1",
+      userId: "user-1",
+    });
+
+    await processStripeWebhookEvent(
+      createEvent(
+        "checkout.session.completed",
+        createCheckoutSession({ payment_status: "unpaid" })
+      )
+    );
+
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).not.toHaveBeenCalled();
+    expect(creditsDb.markCreditTopUpFailed).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      {
+        paymentStatus: "unpaid",
+        sessionId: "cs_test_123",
+      },
+      "Stripe checkout session completed before payment settled"
+    );
   });
 
   it("marks expired checkout sessions", async () => {
@@ -118,6 +151,29 @@ describe("processStripeWebhookEvent", () => {
       creditTopUpId: "topup-1",
       failureReason: "stripe_async_payment_failed",
       stripeCheckoutSessionId: "cs_test_123",
+    });
+  });
+
+  it("credits async payment successes after settlement", async () => {
+    creditsDb.getCreditTopUpByIdOrStripeSessionId.mockResolvedValue({
+      amountCents: 500,
+      id: "topup-1",
+      userId: "user-1",
+    });
+
+    await processStripeWebhookEvent(
+      createEvent(
+        "checkout.session.async_payment_succeeded",
+        createCheckoutSession()
+      )
+    );
+
+    expect(
+      creditsDb.markCreditTopUpCompletedAndAddCredits
+    ).toHaveBeenCalledWith({
+      creditTopUpId: "topup-1",
+      stripeCheckoutSessionId: "cs_test_123",
+      stripePaymentIntentId: "pi_123",
     });
   });
 });

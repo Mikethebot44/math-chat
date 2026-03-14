@@ -393,6 +393,16 @@ export function SearchMathDialog({
               containerClassName="pr-3"
               onKeyDown={async (event) => {
                 if (event.key === "Enter") {
+                  const selectedResult = event.currentTarget
+                    .closest("[cmdk-root]")
+                    ?.querySelector<HTMLElement>(
+                      '[cmdk-item][data-selected="true"]'
+                    );
+
+                  if (selectedResult) {
+                    return;
+                  }
+
                   event.preventDefault();
                   await handleSubmit();
                 }

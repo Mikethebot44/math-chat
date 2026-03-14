@@ -1,8 +1,16 @@
 "use client";
-import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  type Dispatch,
+  type SetStateAction,
+  startTransition,
+  useEffect,
+  useRef,
+} from "react";
 import { useArtifact } from "@/hooks/use-artifact";
 import { DEFAULT_CHAT_TOOL } from "@/lib/ai/math-agent";
 import type { UiToolName } from "@/lib/ai/types";
+import { getChatHref } from "@/lib/chat-routes";
 import { useChatId } from "@/providers/chat-id-provider";
 import { useChatInput } from "@/providers/chat-input-provider";
 import { useSession } from "@/providers/session-provider";
@@ -55,13 +63,20 @@ function processArtifactStreamPart({
   }
 }
 
-export function DataStreamHandler({ id }: { id: string }) {
+export function DataStreamHandler({
+  id,
+  projectId,
+}: {
+  id: string;
+  projectId?: string;
+}) {
   const { dataStream } = useDataStream();
   const { artifact, setArtifact, setMetadata } = useArtifact();
   const lastProcessedIndex = useRef(-1);
   const { data: session } = useSession();
   const { setSelectedTool } = useChatInput();
   const { confirmChatId } = useChatId();
+  const router = useRouter();
   const isAuthenticated = !!session;
 
   useEffect(() => {
@@ -79,6 +94,16 @@ export function DataStreamHandler({ id }: { id: string }) {
         id === delta.data.chatId
       ) {
         confirmChatId(delta.data.chatId);
+
+        const chatHref = getChatHref({
+          chatId: delta.data.chatId,
+          projectId: projectId ?? null,
+        });
+
+        startTransition(() => {
+          router.prefetch(chatHref);
+          router.replace(chatHref);
+        });
       }
 
       handleResearchUpdate({ delta, setSelectedTool });
@@ -99,6 +124,8 @@ export function DataStreamHandler({ id }: { id: string }) {
     setSelectedTool,
     confirmChatId,
     id,
+    projectId,
+    router,
   ]);
 
   return null;

@@ -16,17 +16,28 @@ function normalizePaymentIntentId(
     return paymentIntent;
   }
 
-  if (paymentIntent && typeof paymentIntent === "object" && "id" in paymentIntent) {
+  if (
+    paymentIntent &&
+    typeof paymentIntent === "object" &&
+    "id" in paymentIntent
+  ) {
     return paymentIntent.id;
   }
 
   return null;
 }
 
-export async function processStripeWebhookEvent(event: Stripe.Event): Promise<void> {
+export async function processStripeWebhookEvent(
+  event: Stripe.Event
+): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
       await handleCheckoutSessionCompleted(
+        event.data.object as Stripe.Checkout.Session
+      );
+      return;
+    case "checkout.session.async_payment_succeeded":
+      await handleCheckoutSessionAsyncPaymentSucceeded(
         event.data.object as Stripe.Checkout.Session
       );
       return;
@@ -48,6 +59,27 @@ export async function processStripeWebhookEvent(event: Stripe.Event): Promise<vo
 async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session
 ) {
+  if (session.payment_status !== "paid") {
+    log.warn(
+      {
+        paymentStatus: session.payment_status,
+        sessionId: session.id,
+      },
+      "Stripe checkout session completed before payment settled"
+    );
+    return;
+  }
+
+  await handlePaidCheckoutSession(session);
+}
+
+async function handleCheckoutSessionAsyncPaymentSucceeded(
+  session: Stripe.Checkout.Session
+) {
+  await handlePaidCheckoutSession(session);
+}
+
+async function handlePaidCheckoutSession(session: Stripe.Checkout.Session) {
   const creditTopUpId = session.metadata?.creditTopUpId;
   const userId = session.metadata?.userId;
 
@@ -57,7 +89,7 @@ async function handleCheckoutSessionCompleted(
         metadata: session.metadata,
         sessionId: session.id,
       },
-      "Stripe completed session missing required metadata"
+      "Stripe paid session missing required metadata"
     );
     return;
   }
@@ -68,7 +100,10 @@ async function handleCheckoutSessionCompleted(
   });
 
   if (!topUp) {
-    log.error({ creditTopUpId, sessionId: session.id }, "Credit top-up not found");
+    log.error(
+      { creditTopUpId, sessionId: session.id },
+      "Credit top-up not found"
+    );
     return;
   }
 
@@ -85,7 +120,7 @@ async function handleCheckoutSessionCompleted(
         metadataUserId: userId,
         sessionId: session.id,
       },
-      "Stripe completed session user mismatch"
+      "Stripe paid session user mismatch"
     );
     return;
   }
@@ -103,7 +138,7 @@ async function handleCheckoutSessionCompleted(
         sessionId: session.id,
         topUpId: topUp.id,
       },
-      "Stripe completed session amount mismatch"
+      "Stripe paid session amount mismatch"
     );
     return;
   }
