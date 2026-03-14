@@ -97,7 +97,6 @@ function PureMultimodalInput({
 }) {
   const router = useRouter();
   const storeApi = useChatStoreApi<ChatMessage>();
-  const router = useRouter();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const { isPersisted } = useChatId();

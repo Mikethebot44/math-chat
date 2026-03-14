@@ -26,10 +26,13 @@ export function IntentPrefetchLink({
 }: IntentPrefetchLinkProps) {
   const router = useRouter();
   const hrefString = useMemo(() => href.toString(), [href]);
-  const [shouldPrefetch, setShouldPrefetch] = useState(eagerPrefetch);
+  const [prefetchHref, setPrefetchHref] = useState<string | null>(
+    eagerPrefetch ? hrefString : null
+  );
+  const shouldPrefetch = eagerPrefetch || prefetchHref === hrefString;
 
   const prefetchOnIntent = useCallback(() => {
-    setShouldPrefetch(true);
+    setPrefetchHref(hrefString);
 
     if (prefetchedHrefs.has(hrefString)) {
       return;
@@ -38,6 +41,10 @@ export function IntentPrefetchLink({
     prefetchedHrefs.add(hrefString);
     router.prefetch(href);
   }, [href, hrefString, router]);
+
+  useEffect(() => {
+    setPrefetchHref(eagerPrefetch ? hrefString : null);
+  }, [eagerPrefetch, hrefString]);
 
   useEffect(() => {
     if (eagerPrefetch) {

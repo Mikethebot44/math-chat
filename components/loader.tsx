@@ -68,7 +68,7 @@ export function Loader({
           </p>
         )}
         {subtitle ? (
-          <p className="text-muted-foreground text-xs">{subtitle}</p>
+          <div className="text-muted-foreground text-xs">{subtitle}</div>
         ) : null}
       </div>
     </div>

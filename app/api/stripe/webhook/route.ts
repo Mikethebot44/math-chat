@@ -1,11 +1,17 @@
-import { createModuleLogger } from "@/lib/logger";
+import type Stripe from "stripe";
 import { env } from "@/lib/env";
+import { createModuleLogger } from "@/lib/logger";
 import { getStripeClient } from "@/lib/stripe/server";
 import { processStripeWebhookEvent } from "@/lib/stripe/webhook";
 
 const log = createModuleLogger("api:stripe:webhook");
 
 export async function POST(request: Request) {
+  if (!env.STRIPE_SECRET_KEY) {
+    log.error("Received Stripe webhook request without STRIPE_SECRET_KEY");
+    return new Response("Stripe webhook is not configured", { status: 503 });
+  }
+
   if (!env.STRIPE_WEBHOOK_SECRET) {
     log.error("Received Stripe webhook request without STRIPE_WEBHOOK_SECRET");
     return new Response("Stripe webhook is not configured", { status: 503 });
@@ -18,7 +24,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.text();
-  let event;
+  let event: Stripe.Event;
 
   try {
     event = getStripeClient().webhooks.constructEvent(

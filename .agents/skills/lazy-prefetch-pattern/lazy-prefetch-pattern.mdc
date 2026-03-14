@@ -1,6 +1,6 @@
 ---
 description: React Query v5 lazy prefetch (dehydrate pending queries)
-globs: "*.tsx"
+globs: "app/**/{page,layout,loading,error,not-found,default,template}.tsx"
 alwaysApply: false
 ---
 

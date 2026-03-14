@@ -13,10 +13,7 @@ export async function POST(request: Request) {
 
   if (!isMathSearchConfigured()) {
     return NextResponse.json(
-      {
-        error:
-          "Math paper search is not configured on the server. Set EXA_API_KEY.",
-      },
+      { error: "Math paper search is not currently available." },
       { status: 503 }
     );
   }
