@@ -35,6 +35,7 @@ import { config } from "@/lib/config";
 import { createAnonymousSession } from "@/lib/create-anonymous-session";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
 import { canSpend, deductCredits } from "@/lib/db/credits";
+import { createAgentRun, createCancelledAgentRun } from "@/lib/db/agent-runs";
 import { getMcpConnectorsByUserId } from "@/lib/db/mcp-queries";
 import {
   getChatById,
@@ -568,19 +569,15 @@ type SessionSetupResult =
     };
 
 async function validateAndSetupSession({
-  request,
   selectedModelId,
 }: {
-  request: NextRequest;
   selectedModelId: AppModelId;
 }): Promise<SessionSetupResult> {
   const log = createModuleLogger("api:chat:setup");
 
   const session = await auth.api.getSession({ headers: await headers() });
   const userId = session?.user?.id ?? null;
-  const isAnonymous = userId === null;
-
-  let anonymousSession: AnonymousSession | null = null;
+  const isAnonymous = false;
 
   if (userId) {
     const user = await getUserById({ userId });
@@ -592,16 +589,16 @@ async function validateAndSetupSession({
       };
     }
   } else {
-    const result = await handleAnonymousSession({
-      request,
-      redis: getStreamPublisher(),
-      selectedModelId,
-    });
-
-    if (!result.success) {
-      return result;
-    }
-    anonymousSession = result.session;
+    return {
+      success: false,
+      error: Response.json(
+        {
+          error: "Authentication required to send chats",
+          type: "AUTH_REQUIRED",
+        },
+        { status: 401 }
+      ),
+    };
   }
 
   let modelDefinition: AppModelDefinition;
@@ -619,7 +616,7 @@ async function validateAndSetupSession({
     success: true,
     userId,
     isAnonymous,
-    anonymousSession,
+    anonymousSession: null,
     modelDefinition,
   };
 }
@@ -767,7 +764,6 @@ export async function POST(request: NextRequest) {
     };
 
     const sessionSetup = await validateAndSetupSession({
-      request,
       selectedModelId,
     });
 

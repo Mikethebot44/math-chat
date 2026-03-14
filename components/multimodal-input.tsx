@@ -43,6 +43,7 @@ import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
 import { ConnectorsDropdown } from "./connectors-dropdown";
+import { ContextUsageFromParent } from "./context-usage-from-parent";
 import { LexicalChatInput } from "./lexical-chat-input";
 import {
   DropdownMenu,
@@ -96,6 +97,7 @@ function PureMultimodalInput({
 }) {
   const router = useRouter();
   const storeApi = useChatStoreApi<ChatMessage>();
+  const router = useRouter();
   const { artifact, closeArtifact } = useArtifact();
   const { data: session } = useSession();
   const { isPersisted } = useChatId();
@@ -382,8 +384,13 @@ function PureMultimodalInput({
   ]);
 
   const submitForm = useCallback(() => {
+    if (!session?.user) {
+      router.push("/login");
+      return;
+    }
+
     handleSubmit(coreSubmitLogic, isEditMode);
-  }, [handleSubmit, coreSubmitLogic, isEditMode]);
+  }, [session?.user, router, handleSubmit, coreSubmitLogic, isEditMode]);
 
   const uploadFile = useCallback(
     async (
@@ -628,12 +635,7 @@ function PureMultimodalInput({
             </div>
           )}
 
-          {!isEditMode && (
-            <LimitDisplay
-              className="p-2"
-              forceVariant={isModelDisallowedForAnonymous ? "model" : "credits"}
-            />
-          )}
+          {!isEditMode && <LimitDisplay className="p-2" forceVariant="model" />}
 
           <ContextBar
             attachments={attachments}
@@ -685,6 +687,8 @@ function PureMultimodalInput({
             hasPendingAristotle={hasPendingAristotle}
             submission={submission}
             submitForm={submitForm}
+            parentMessageId={parentMessageId}
+            selectedModelId={selectedModelId}
           />
         </PromptInput>
       </div>
@@ -837,6 +841,8 @@ function PureChatInputBottomControls({
   acceptFiles,
   attachmentsEnabled,
   onStop,
+  parentMessageId,
+  selectedModelId,
 }: {
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
@@ -849,6 +855,8 @@ function PureChatInputBottomControls({
   acceptFiles: string;
   attachmentsEnabled: boolean;
   onStop: () => void;
+  parentMessageId: string | null;
+  selectedModelId: string;
 }) {
   return (
     <PromptInputFooter className="flex w-full min-w-0 flex-row items-center justify-between @[500px]:gap-2 gap-1 border-t px-1 py-1 group-has-[>input]/input-group:pb-1 [.border-t]:pt-1">
@@ -864,30 +872,39 @@ function PureChatInputBottomControls({
         )}
         <ConnectorsDropdown />
       </PromptInputTools>
-      <PromptInputSubmit
-        className={"@[500px]:size-10 size-8 shrink-0"}
-        disabled={
-          hasPendingAristotle || (displayStatus === "ready" && !submission.enabled)
-        }
-        onClick={(e) => {
-          e.preventDefault();
-          if (hasPendingAristotle) {
-            return;
+      <div className="flex items-center gap-1">
+        <ContextUsageFromParent
+          className="@[500px]:block hidden"
+          iconOnly
+          parentMessageId={parentMessageId}
+          selectedModelId={selectedModelId}
+        />
+        <PromptInputSubmit
+          className={"@[500px]:size-10 size-8 shrink-0"}
+          disabled={
+            hasPendingAristotle ||
+            (displayStatus === "ready" && !submission.enabled)
           }
-          if (status === "streaming" || status === "submitted") {
-            onStop();
-          } else if (status === "ready" || status === "error") {
-            if (!submission.enabled) {
-              if (submission.message) {
-                toast.error(submission.message);
-              }
+          onClick={(e) => {
+            e.preventDefault();
+            if (hasPendingAristotle) {
               return;
             }
-            submitForm();
-          }
-        }}
-        status={displayStatus}
-      />
+            if (status === "streaming" || status === "submitted") {
+              onStop();
+            } else if (status === "ready" || status === "error") {
+              if (!submission.enabled) {
+                if (submission.message) {
+                  toast.error(submission.message);
+                }
+                return;
+              }
+              submitForm();
+            }
+          }}
+          status={displayStatus}
+        />
+      </div>
     </PromptInputFooter>
   );
 }
