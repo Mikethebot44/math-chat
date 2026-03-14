@@ -88,6 +88,34 @@ export const userModelPreference = pgTable(
 
 export type UserModelPreference = InferSelectModel<typeof userModelPreference>;
 
+export const userPreference = pgTable(
+  "UserPreference",
+  {
+    userId: text("userId")
+      .primaryKey()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    preferredName: varchar("preferredName", {
+      length: 50,
+    }),
+    occupation: varchar("occupation", {
+      length: 100,
+    }),
+    assistantTraits: json("assistantTraits").$type<string[]>().notNull().default([]),
+    additionalContext: text("additionalContext"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    UserPreference_user_id_idx: index("UserPreference_user_id_idx").on(t.userId),
+  })
+);
+
+export type UserPreference = InferSelectModel<typeof userPreference>;
+
 export const project = pgTable(
   "Project",
   {

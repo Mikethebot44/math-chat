@@ -11,6 +11,7 @@ import type { Document } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import type { UIArtifact } from "../artifact-panel";
 import { InlineDocumentSkeleton } from "../document-skeleton";
+import { ScrollArea } from "../ui/scroll-area";
 import { DocumentToolCall, DocumentToolResult } from "./document-common";
 
 const CodeEditor = dynamic(
@@ -299,7 +300,7 @@ const DocumentContent = ({ document }: { document: Document }) => {
   const { artifact } = useArtifact();
 
   const containerClassName = cn(
-    "h-[257px] overflow-y-scroll rounded-b-2xl border border-t-0 dark:border-zinc-700 dark:bg-muted",
+    "h-[257px] rounded-b-2xl border border-t-0 dark:border-zinc-700 dark:bg-muted",
     {
       "p-4 sm:px-14 sm:py-16": document.kind === "text",
       "p-0": document.kind === "code",
@@ -317,7 +318,7 @@ const DocumentContent = ({ document }: { document: Document }) => {
   };
 
   return (
-    <div className={containerClassName}>
+    <ScrollArea className={containerClassName}>
       {(() => {
         if (document.kind === "text") {
           return (
@@ -366,6 +367,6 @@ const DocumentContent = ({ document }: { document: Document }) => {
         }
         return null;
       })()}
-    </div>
+    </ScrollArea>
   );
 };

@@ -6,6 +6,7 @@ import {
   markCreditTopUpFailed,
 } from "@/lib/db/credits";
 import { createModuleLogger } from "@/lib/logger";
+import { getStripeClient, getStripeKeyMode } from "@/lib/stripe/server";
 
 const log = createModuleLogger("stripe:webhook");
 
@@ -54,6 +55,82 @@ export async function processStripeWebhookEvent(
     default:
       return;
   }
+}
+
+export async function reconcileStripeCheckoutSession(
+  sessionId: string
+): Promise<void> {
+  const stripe = getStripeClient();
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let session: Stripe.Checkout.Session;
+
+    try {
+      session = await stripe.checkout.sessions.retrieve(sessionId);
+    } catch (error) {
+      if (await handleStripeSessionLookupError(error, sessionId)) {
+        return;
+      }
+
+      throw error;
+    }
+
+    if (session.payment_status === "paid") {
+      await handlePaidCheckoutSession(session);
+      return;
+    }
+
+    if (session.status === "expired") {
+      await handleCheckoutSessionExpired(session);
+      return;
+    }
+
+    if (attempt === 2) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+}
+
+async function handleStripeSessionLookupError(
+  error: unknown,
+  sessionId: string
+): Promise<boolean> {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+      ? error.code
+      : null;
+
+  if (code !== "resource_missing") {
+    return false;
+  }
+
+  const keyMode = getStripeKeyMode();
+  const sessionMode = sessionId.startsWith("cs_live_")
+    ? "live"
+    : sessionId.startsWith("cs_test_")
+      ? "test"
+      : "unknown";
+
+  log.warn(
+    {
+      keyMode,
+      sessionId,
+      sessionMode,
+    },
+    "Stripe checkout session could not be retrieved during reconciliation"
+  );
+
+  await markCreditTopUpFailed({
+    failureReason: "stripe_checkout_session_missing",
+    stripeCheckoutSessionId: sessionId,
+  });
+
+  return true;
 }
 
 async function handleCheckoutSessionCompleted(

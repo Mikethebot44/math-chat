@@ -6,6 +6,7 @@ import { generateFollowupSuggestions } from "@/lib/ai/followup-suggestions";
 import { systemPrompt } from "@/lib/ai/prompts";
 import type { ChatMessage, StreamWriter, ToolName } from "@/lib/ai/types";
 import { CostAccumulator } from "@/lib/credits/cost-accumulator";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { generateUUID } from "@/lib/utils";
 
 // No-op StreamWriter for evals - tools can write but nothing happens
@@ -61,9 +62,10 @@ async function executeAgentAndGetOutput({
   >;
 }> {
   const noOpStreamWriter = createNoOpStreamWriter();
+  const userPreferences = userId ? await getUserPreferences({ userId }) : null;
 
   const { result, contextForLLM } = await createCoreChatAgent({
-    system: systemPrompt(),
+    system: systemPrompt({ userPreferences }),
     userMessage,
     previousMessages,
     selectedModelId,

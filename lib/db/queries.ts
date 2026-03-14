@@ -136,25 +136,12 @@ export async function getChatsByUserId({
   id: string;
   projectId?: string | null;
 }) {
-  console.log("[getChatsByUserId] Starting", {
-    userId: id,
-    projectId,
-    projectIdType: typeof projectId,
-    projectIdIsNull: projectId === null,
-    projectIdIsUndefined: projectId === undefined,
-  });
-
   try {
     const cachedChats = await getCachedChatsByUserId({
       userId: id,
       projectId,
     });
     if (cachedChats) {
-      console.log("[getChatsByUserId] Cache hit", {
-        count: cachedChats.length,
-        userId: id,
-        projectId,
-      });
       return cachedChats;
     }
 
@@ -162,36 +149,19 @@ export async function getChatsByUserId({
     if (projectId === null) {
       // Filter for chats without a project
       conditions = and(eq(chat.userId, id), isNull(chat.projectId));
-      console.log("[getChatsByUserId] Using null project condition");
     } else if (projectId) {
       // Filter for chats in a specific project
       conditions = and(eq(chat.userId, id), eq(chat.projectId, projectId));
-      console.log("[getChatsByUserId] Using specific project condition", {
-        projectId,
-      });
     } else {
       // Get all chats for user
       conditions = eq(chat.userId, id);
-      console.log("[getChatsByUserId] Using all chats condition");
     }
 
-    console.log("[getChatsByUserId] Executing query");
     const result = await db
       .select()
       .from(chat)
       .where(conditions)
       .orderBy(desc(chat.updatedAt));
-
-    console.log("[getChatsByUserId] Query completed", {
-      count: result.length,
-      sampleChat: result[0]
-        ? {
-            id: result[0].id,
-            updatedAt: result[0].updatedAt,
-            updatedAtType: typeof result[0].updatedAt,
-          }
-        : null,
-    });
 
     await setCachedChatsByUserId({
       userId: id,
@@ -201,16 +171,7 @@ export async function getChatsByUserId({
 
     return result;
   } catch (error) {
-    console.error(
-      "[getChatsByUserId] Failed to get chats by user from database",
-      {
-        error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        userId: id,
-        projectId,
-      }
-    );
+    logger.error({ error, userId: id, projectId }, "getChatsByUserId failed");
     throw error;
   }
 }

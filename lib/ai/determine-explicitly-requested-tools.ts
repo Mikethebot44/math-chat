@@ -7,11 +7,19 @@ import type { ChatTools, ToolName } from "./types";
  * This is the single source of truth for explicit tool mapping.
  */
 
+export function hasExplicitToolRestriction(
+  explicitlyRequestedTools: ToolName[] | null
+): explicitlyRequestedTools is ToolName[] {
+  return explicitlyRequestedTools !== null;
+}
+
 export function determineExplicitlyRequestedTools(
   selectedTool: keyof ChatTools | null
 ): ToolName[] | null {
   if (!selectedTool) {
-    return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
+    return ALWAYS_ENABLED_MATH_AGENT_TOOLS.length > 0
+      ? ALWAYS_ENABLED_MATH_AGENT_TOOLS
+      : null;
   }
   if (selectedTool === "deepResearch") {
     return ["deepResearch"];
@@ -27,7 +35,7 @@ export function determineExplicitlyRequestedTools(
   }
   if (selectedTool === "createTextDocument") {
     if (!config.features.sandbox) {
-      return null;
+      return ALWAYS_ENABLED_MATH_AGENT_TOOLS;
     }
     return [
       "createTextDocument",

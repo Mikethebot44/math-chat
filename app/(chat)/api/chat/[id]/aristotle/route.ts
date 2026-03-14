@@ -23,6 +23,7 @@ import {
   saveMessage,
   updateMessage,
 } from "@/lib/db/queries";
+import { getUserPreferences } from "@/lib/db/user-preferences";
 import { buildThreadFromLeaf } from "@/lib/thread-utils";
 import { generateUUID } from "@/lib/utils";
 import { replaceFilePartUrlByBinaryDataInMessages } from "@/lib/utils/download-assets";
@@ -172,10 +173,13 @@ function findExistingContinuationMessage({
 
 async function getSystemPromptForChat({
   chatId,
+  userId,
 }: {
   chatId: string;
+  userId: string | null;
 }): Promise<string> {
-  let system = systemPrompt();
+  const userPreferences = userId ? await getUserPreferences({ userId }) : null;
+  let system = systemPrompt({ userPreferences });
   const chat = await getChatById({ id: chatId });
   if (chat?.projectId) {
     const project = await getProjectById({ id: chat.projectId });
@@ -247,7 +251,7 @@ async function generateContinuationMessage({
   const [model, providerOptions, system] = await Promise.all([
     getLanguageModel(selectedModelId),
     getModelProviderOptions(selectedModelId),
-    getSystemPromptForChat({ chatId }),
+    getSystemPromptForChat({ chatId, userId }),
   ]);
 
   const result = await generateText({

@@ -40,7 +40,6 @@ import { useChatModels } from "@/providers/chat-models-provider";
 import { useSession } from "@/providers/session-provider";
 import { useTRPC } from "@/trpc/react";
 import { ConnectorsDropdown } from "./connectors-dropdown";
-import { ContextUsageFromParent } from "./context-usage-from-parent";
 import { LexicalChatInput } from "./lexical-chat-input";
 import {
   DropdownMenu,
@@ -837,12 +836,6 @@ function PureChatInputBottomControls({
         <ConnectorsDropdown />
       </PromptInputTools>
       <div className="flex items-center gap-1">
-        <ContextUsageFromParent
-          className="@[500px]:block hidden"
-          iconOnly
-          parentMessageId={parentMessageId}
-          selectedModelId={selectedModelId}
-        />
         <PromptInputSubmit
           className={"@[500px]:size-10 size-8 shrink-0"}
           disabled={
