@@ -55,6 +55,8 @@ import {
   vote,
 } from "./schema";
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 async function _getUserByEmail(email: string): Promise<User[]> {
   try {
     return await db.select().from(user).where(eq(user.email, email));
@@ -349,7 +351,7 @@ export async function saveMessage({
       }
 
       // Update chat's updatedAt timestamp
-      await updateChatUpdatedAt({ chatId });
+      await updateChatUpdatedAt({ chatId, tx });
 
       return;
     });
@@ -398,7 +400,7 @@ export async function saveChatMessages({
       // Update chat's updatedAt timestamp for all affected chats
       const uniqueChatIds = [...new Set(messages.map(({ chatId }) => chatId))];
       await Promise.all(
-        uniqueChatIds.map((chatId) => updateChatUpdatedAt({ chatId }))
+        uniqueChatIds.map((chatId) => updateChatUpdatedAt({ chatId, tx }))
       );
 
       return;
@@ -1089,9 +1091,16 @@ export async function updateMessageCanceledAt({
   }
 }
 
-async function updateChatUpdatedAt({ chatId }: { chatId: string }) {
+async function updateChatUpdatedAt({
+  chatId,
+  tx,
+}: {
+  chatId: string;
+  tx?: DbTransaction;
+}) {
   try {
-    const result = await db
+    const executor = tx ?? db;
+    const result = await executor
       .update(chat)
       .set({
         updatedAt: new Date(),
