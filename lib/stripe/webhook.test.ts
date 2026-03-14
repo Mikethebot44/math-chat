@@ -220,7 +220,7 @@ describe("processStripeWebhookEvent", () => {
     });
   });
 
-  it("fails missing checkout sessions during reconciliation", async () => {
+  it("leaves missing checkout sessions pending during reconciliation", async () => {
     stripeClient.checkout.sessions.retrieve.mockRejectedValue({
       code: "resource_missing",
     });
@@ -235,12 +235,9 @@ describe("processStripeWebhookEvent", () => {
         sessionId: "cs_live_missing",
         sessionMode: "live",
       },
-      "Stripe checkout session could not be retrieved during reconciliation"
+      "Stripe checkout session could not be retrieved during reconciliation; leaving top-up pending for future retries"
     );
-    expect(creditsDb.markCreditTopUpFailed).toHaveBeenCalledWith({
-      failureReason: "stripe_checkout_session_missing",
-      stripeCheckoutSessionId: "cs_live_missing",
-    });
+    expect(creditsDb.markCreditTopUpFailed).not.toHaveBeenCalled();
   });
 
   it("warns when reconciliation exhausts retries without a terminal session state", async () => {

@@ -130,13 +130,8 @@ async function handleStripeSessionLookupError(
       sessionId,
       sessionMode,
     },
-    "Stripe checkout session could not be retrieved during reconciliation"
+    "Stripe checkout session could not be retrieved during reconciliation; leaving top-up pending for future retries"
   );
-
-  await markCreditTopUpFailed({
-    failureReason: "stripe_checkout_session_missing",
-    stripeCheckoutSessionId: sessionId,
-  });
 
   return true;
 }
