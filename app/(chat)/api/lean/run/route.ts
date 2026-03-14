@@ -29,6 +29,12 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Failed to run Lean file";
 }
 
+function getClientSafeErrorMessage(errorMessage: string): string {
+  return MISSING_CONFIGURATION_RE.test(errorMessage)
+    ? errorMessage
+    : "Failed to run Lean file";
+}
+
 async function getOrCreateLeanSandbox(
   sandboxId: string | null | undefined
 ): Promise<{ reusedSandbox: boolean; sandbox: Sandbox }> {
@@ -147,7 +153,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: errorMessage },
+      { error: getClientSafeErrorMessage(errorMessage) },
       {
         status: MISSING_CONFIGURATION_RE.test(errorMessage) ? 503 : 500,
       }

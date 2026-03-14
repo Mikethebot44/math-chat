@@ -29,10 +29,7 @@ export async function GET(request: NextRequest) {
     unstable_rethrow(error);
     console.error("Cleanup cron job failed:", error);
     return NextResponse.json(
-      {
-        error: "Cleanup failed",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
+      { error: "Cleanup failed" },
       { status: 500 }
     );
   }

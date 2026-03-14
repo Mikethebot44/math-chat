@@ -40,10 +40,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Math search example cache failed.",
+        error: "Math search example cache failed.",
       },
       { status: 500 }
     );
