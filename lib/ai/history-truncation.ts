@@ -19,7 +19,7 @@ export function getModelInputTokenBudget({
     : 0;
   const budget =
     context_window - Math.max(max_tokens, 0) - reservedSystemTokens;
-  return budget > 0 ? budget : null;
+  return budget > 0 ? budget : 0;
 }
 
 export function truncateModelMessagesToFitBudget(
@@ -37,5 +37,5 @@ export function truncateModelMessagesToFitBudget(
     system: options?.system,
   });
 
-  return budget ? truncateMessages(messages, budget, false) : [];
+  return budget === null ? messages : truncateMessages(messages, budget, false);
 }

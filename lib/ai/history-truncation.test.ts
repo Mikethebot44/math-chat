@@ -45,4 +45,18 @@ describe("history truncation", () => {
       )
     ).toEqual([]);
   });
+
+  it("preserves messages when the context window is unknown", () => {
+    const messages = [
+      { role: "user" as const, content: "Hello" },
+      { role: "assistant" as const, content: "Hi there" },
+    ];
+
+    expect(
+      truncateModelMessagesToFitBudget(messages, {
+        context_window: 0,
+        max_tokens: 50,
+      })
+    ).toEqual(messages);
+  });
 });
