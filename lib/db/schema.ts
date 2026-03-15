@@ -30,6 +30,66 @@ export const userCredit = pgTable("UserCredit", {
 
 export type UserCredit = InferSelectModel<typeof userCredit>;
 
+export const userApiKey = pgTable(
+  "UserApiKey",
+  {
+    userId: text("userId")
+      .primaryKey()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    keyPrefix: varchar("keyPrefix", { length: 32 }).notNull(),
+    keySuffix: varchar("keySuffix", { length: 8 }).notNull(),
+    keyHash: varchar("keyHash", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    rotatedAt: timestamp("rotatedAt").notNull().defaultNow(),
+    lastUsedAt: timestamp("lastUsedAt"),
+  },
+  (t) => ({
+    UserApiKey_hash_idx: uniqueIndex("UserApiKey_hash_idx").on(t.keyHash),
+  })
+);
+
+export type UserApiKey = InferSelectModel<typeof userApiKey>;
+
+export const apiCompletion = pgTable(
+  "ApiCompletion",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 32 }).notNull().default("queued"),
+    model: varchar("model", { length: 64 }).notNull(),
+    requestMessages: json("requestMessages").notNull(),
+    responseText: text("responseText"),
+    leanFileName: text("leanFileName"),
+    leanFileContent: text("leanFileContent"),
+    aristotleJobId: text("aristotleJobId"),
+    errorCode: text("errorCode"),
+    errorMessage: text("errorMessage"),
+    usagePromptTokens: integer("usagePromptTokens"),
+    usageCompletionTokens: integer("usageCompletionTokens"),
+    creditsCharged: integer("creditsCharged").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    completedAt: timestamp("completedAt"),
+  },
+  (t) => ({
+    ApiCompletion_user_id_idx: index("ApiCompletion_user_id_idx").on(t.userId),
+    ApiCompletion_status_created_at_idx: index(
+      "ApiCompletion_status_created_at_idx"
+    ).on(t.status, t.createdAt),
+    ApiCompletion_user_id_created_at_idx: index(
+      "ApiCompletion_user_id_created_at_idx"
+    ).on(t.userId, t.createdAt),
+  })
+);
+
+export type ApiCompletion = InferSelectModel<typeof apiCompletion>;
+
 export const creditTopUp = pgTable(
   "CreditTopUp",
   {

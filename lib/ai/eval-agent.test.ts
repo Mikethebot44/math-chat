@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
 
 const createCoreChatAgent = vi.hoisted(() => vi.fn());
 const determineExplicitlyRequestedTools = vi.hoisted(() => vi.fn(() => null));
@@ -64,7 +65,7 @@ function createUserMessage() {
       activeStreamId: null,
       createdAt: new Date("2026-03-14T00:00:00.000Z"),
       parentMessageId: null,
-      selectedModel: "scout-model",
+      selectedModel: DEFAULT_SCOUT_MODEL_ID,
     },
     parts: [{ text: "hello", type: "text" as const }],
     role: "user" as const,
@@ -88,7 +89,7 @@ describe("runCoreChatAgentEval", () => {
     await runCoreChatAgentEval({
       activeTools: [],
       previousMessages: [],
-      selectedModelId: "scout-model",
+      selectedModelId: DEFAULT_SCOUT_MODEL_ID,
       selectedTool: null,
       userId: null,
       userMessage: createUserMessage(),
@@ -109,7 +110,7 @@ describe("runCoreChatAgentEval", () => {
     await runCoreChatAgentEval({
       activeTools: [],
       previousMessages: [],
-      selectedModelId: "scout-model",
+      selectedModelId: DEFAULT_SCOUT_MODEL_ID,
       selectedTool: null,
       userId: "user-1",
       userMessage: createUserMessage(),
