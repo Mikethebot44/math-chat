@@ -1,5 +1,8 @@
-import { getUserApiKeyByHash, touchUserApiKeyLastUsedAt } from "@/lib/db/api-access";
-import { hashApiKey, verifyApiKeyHash } from "./api-key";
+import {
+  getUserApiKeyByHash,
+  touchUserApiKeyLastUsedAt,
+} from "@/lib/db/api-access";
+import { hashApiKey } from "./api-key";
 
 function getBearerToken(authorizationHeader: string | null) {
   if (!authorizationHeader) {
@@ -27,10 +30,6 @@ export async function authenticateApiKey({
   const keyHash = hashApiKey(apiKey);
   const apiKeyRow = await getUserApiKeyByHash({ keyHash });
   if (!apiKeyRow) {
-    return null;
-  }
-
-  if (!verifyApiKeyHash({ apiKey, keyHash: apiKeyRow.keyHash })) {
     return null;
   }
 

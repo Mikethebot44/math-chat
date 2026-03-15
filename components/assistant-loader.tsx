@@ -20,8 +20,9 @@ export function AssistantLoader({
   return (
     <div data-testid="message-assistant-loading">
       <Loader
-        className={cn("min-h-[240px] px-0", className)}
+        className={cn("min-h-[240px] items-start px-0 text-left", className)}
         label={label ?? DEFAULT_ASSISTANT_LABEL}
+        labelClassName="text-left"
         labelShimmer
         subtitle={resolvedSubtitle}
       />

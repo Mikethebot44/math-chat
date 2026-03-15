@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
   Check,
   Copy,
   KeyRound,
@@ -12,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SettingsPageContent } from "@/components/settings/settings-page";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -30,7 +33,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useTRPC } from "@/trpc/react";
 
 function formatDateTime(value: Date | string | null) {
@@ -63,6 +65,69 @@ function buildCurlPollExample(baseUrl: string) {
   ].join("\n");
 }
 
+function getCurrentKeyText({
+  isError,
+  isLoading,
+  maskedKey,
+}: {
+  isError: boolean;
+  isLoading: boolean;
+  maskedKey: string | null | undefined;
+}) {
+  if (isLoading) {
+    return "Loading...";
+  }
+
+  if (isError) {
+    return "Unable to load API key";
+  }
+
+  return maskedKey ?? "No API key generated yet";
+}
+
+function getApiAccessValue({
+  hasError,
+  value,
+}: {
+  hasError: boolean;
+  value: string;
+}) {
+  return hasError ? "Unavailable" : value;
+}
+
+function getApiKeyActionContent({
+  hasKey,
+  isPending,
+}: {
+  hasKey: boolean;
+  isPending: boolean;
+}) {
+  if (isPending) {
+    return (
+      <>
+        <Loader2 className="size-4 animate-spin" />
+        Updating key...
+      </>
+    );
+  }
+
+  if (hasKey) {
+    return (
+      <>
+        <RotateCcw className="size-4" />
+        Rotate key
+      </>
+    );
+  }
+
+  return (
+    <>
+      <KeyRound className="size-4" />
+      Create key
+    </>
+  );
+}
+
 function TerminalCommandBlock({ code }: { code: string }) {
   const [isCopied, setIsCopied] = useState(false);
 
@@ -85,9 +150,7 @@ function TerminalCommandBlock({ code }: { code: string }) {
         </div>
         <Button
           className="h-7 px-2 text-xs"
-          onClick={() => {
-            void handleCopy();
-          }}
+          onClick={handleCopy}
           type="button"
           variant="ghost"
         >
@@ -99,7 +162,7 @@ function TerminalCommandBlock({ code }: { code: string }) {
           {isCopied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <pre className="terminal-command-scroll overflow-x-auto bg-transparent px-4 py-4 font-mono text-foreground text-xs leading-6 whitespace-pre">
+      <pre className="terminal-command-scroll overflow-x-auto whitespace-pre bg-transparent px-4 py-4 font-mono text-foreground text-xs leading-6">
         <code>{code}</code>
       </pre>
     </div>
@@ -149,6 +212,10 @@ export function ApiKeySettings() {
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
 
   const apiAccessQuery = useQuery(trpc.settings.getApiAccess.queryOptions());
+  const apiAccessErrorMessage =
+    apiAccessQuery.error instanceof Error
+      ? apiAccessQuery.error.message
+      : "Failed to load API access settings.";
 
   const rotateApiKeyMutation = useMutation(
     trpc.settings.rotateApiKey.mutationOptions({
@@ -170,7 +237,48 @@ export function ApiKeySettings() {
     })
   );
 
-  const hasKey = apiAccessQuery.data?.hasKey ?? false;
+  const hasKey = apiAccessQuery.isError
+    ? false
+    : (apiAccessQuery.data?.hasKey ?? false);
+  const isApiAccessError = apiAccessQuery.isError;
+  const isRotateButtonDisabled =
+    rotateApiKeyMutation.isPending ||
+    apiAccessQuery.isLoading ||
+    isApiAccessError;
+  const currentKeyText = getCurrentKeyText({
+    isError: isApiAccessError,
+    isLoading: apiAccessQuery.isLoading,
+    maskedKey: apiAccessQuery.data?.maskedKey,
+  });
+  const rotatedAtText = getApiAccessValue({
+    hasError: isApiAccessError,
+    value: formatDateTime(apiAccessQuery.data?.rotatedAt ?? null),
+  });
+  const lastUsedAtText = getApiAccessValue({
+    hasError: isApiAccessError,
+    value: formatDateTime(apiAccessQuery.data?.lastUsedAt ?? null),
+  });
+  const availableCreditsText = getApiAccessValue({
+    hasError: isApiAccessError,
+    value: String(apiAccessQuery.data?.credits ?? 0),
+  });
+
+  function handleRotateApiKey() {
+    rotateApiKeyMutation.mutate();
+  }
+
+  async function handleCopyRevealedKey() {
+    if (!revealedKey) {
+      return;
+    }
+
+    try {
+      await copyToClipboard(revealedKey);
+      toast.success("API key copied");
+    } catch {
+      toast.error("Failed to copy API key");
+    }
+  }
 
   return (
     <SettingsPageContent className="gap-6">
@@ -190,38 +298,37 @@ export function ApiKeySettings() {
                 <KeyRound className="size-4" />
                 Current key
               </div>
-              <div className="rounded-lg bg-muted px-4 py-4 font-mono text-sm break-all">
-                {apiAccessQuery.isLoading
-                  ? "Loading..."
-                  : (apiAccessQuery.data?.maskedKey ??
-                    "No API key generated yet")}
+              <div className="break-all rounded-lg bg-muted px-4 py-4 font-mono text-sm">
+                {currentKeyText}
               </div>
             </div>
+
+            {isApiAccessError ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Couldn&apos;t load API access</AlertTitle>
+                <AlertDescription>{apiAccessErrorMessage}</AlertDescription>
+              </Alert>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1">
                 <p className="text-muted-foreground text-xs uppercase tracking-wide">
                   Rotated
                 </p>
-                <p className="text-sm">
-                  {formatDateTime(apiAccessQuery.data?.rotatedAt ?? null)}
-                </p>
+                <p className="text-sm">{rotatedAtText}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-muted-foreground text-xs uppercase tracking-wide">
                   Last used
                 </p>
-                <p className="text-sm">
-                  {formatDateTime(apiAccessQuery.data?.lastUsedAt ?? null)}
-                </p>
+                <p className="text-sm">{lastUsedAtText}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-muted-foreground text-xs uppercase tracking-wide">
                   Available credits
                 </p>
-                <p className="font-semibold text-2xl">
-                  {apiAccessQuery.data?.credits ?? 0}
-                </p>
+                <p className="font-semibold text-2xl">{availableCreditsText}</p>
               </div>
             </div>
 
@@ -229,27 +336,13 @@ export function ApiKeySettings() {
               <AlertDialogTrigger asChild>
                 <Button
                   className="w-full sm:w-auto"
-                  disabled={
-                    rotateApiKeyMutation.isPending || apiAccessQuery.isLoading
-                  }
+                  disabled={isRotateButtonDisabled}
                   type="button"
                 >
-                  {rotateApiKeyMutation.isPending ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      Updating key...
-                    </>
-                  ) : hasKey ? (
-                    <>
-                      <RotateCcw className="size-4" />
-                      Rotate key
-                    </>
-                  ) : (
-                    <>
-                      <KeyRound className="size-4" />
-                      Create key
-                    </>
-                  )}
+                  {getApiKeyActionContent({
+                    hasKey,
+                    isPending: rotateApiKeyMutation.isPending,
+                  })}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -265,11 +358,7 @@ export function ApiKeySettings() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      void rotateApiKeyMutation.mutateAsync();
-                    }}
-                  >
+                  <AlertDialogAction onClick={handleRotateApiKey}>
                     {hasKey ? "Rotate key" : "Create key"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -288,15 +377,11 @@ export function ApiKeySettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-lg bg-muted px-4 py-4 font-mono text-sm break-all">
+              <div className="break-all rounded-lg bg-muted px-4 py-4 font-mono text-sm">
                 {revealedKey}
               </div>
               <Button
-                onClick={() =>
-                  copyToClipboard(revealedKey).then(() =>
-                    toast.success("API key copied")
-                  )
-                }
+                onClick={handleCopyRevealedKey}
                 type="button"
                 variant="outline"
               >

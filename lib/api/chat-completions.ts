@@ -28,6 +28,7 @@ const log = createModuleLogger("api:chat-completions");
 
 const API_MODEL_NAME = "Scout";
 const API_ACTIVE_TOOLS = ["leanProof", "aristotleCheckJob"] as const;
+const API_MESSAGE_WINDOW = 5;
 
 export const apiCompletionMessageSchema = z.object({
   role: z.enum(["assistant", "system", "user"]),
@@ -337,6 +338,12 @@ function getLatestLeanToolSnapshot(parts: ChatMessage["parts"]) {
   return latestPart.output as LeanToolSnapshot;
 }
 
+function convertApiMessagesToModelMessages(messages: ChatMessage[]) {
+  return convertToModelMessages(messages.slice(-API_MESSAGE_WINDOW), {
+    convertDataPart: (_part): undefined => undefined,
+  });
+}
+
 async function executeInitialCompletion({
   messages,
   userId,
@@ -435,7 +442,7 @@ async function generateContinuationText({
     },
   };
 
-  const modelMessages = await convertToModelMessages([
+  const modelMessages = await convertApiMessagesToModelMessages([
     ...previousMessages,
     userMessage,
     continuationRequest,
@@ -641,55 +648,27 @@ export async function getProgrammaticCompletion({
   return await toApiCompletionResponse(completion);
 }
 
-export async function pollProgrammaticCompletion({
-  completionId,
-  userId,
-}: {
-  completionId: string;
-  userId: string;
-}) {
-  const completion = await getApiCompletionByIdForUser({
-    id: completionId,
-    userId,
-  });
-
-  if (!completion) {
-    return null;
-  }
-
-  if (
+function shouldReturnPolledCompletion(completion: ApiCompletion) {
+  return (
     completion.status === "completed" ||
     completion.status === "failed" ||
+    completion.status === "finalizing" ||
     completion.status === "queued" ||
     !completion.aristotleJobId
-  ) {
-    return await toApiCompletionResponse(completion);
-  }
+  );
+}
 
-  const snapshot = await checkAristotleJobStatus({
-    jobId: completion.aristotleJobId,
-    waitForCompletion: false,
-  });
-
-  if (!(snapshot.completed || snapshot.failed)) {
-    return await toApiCompletionResponse(completion);
-  }
-
-  const claim = await beginApiCompletionFinalization({
-    id: completionId,
-    userId,
-  });
-
-  if (!claim) {
-    const latestCompletion = await getApiCompletionByIdForUser({
-      id: completionId,
-      userId,
-    });
-    return latestCompletion
-      ? await toApiCompletionResponse(latestCompletion)
-      : null;
-  }
-
+async function finalizePolledProgrammaticCompletion({
+  completion,
+  completionId,
+  snapshot,
+  userId,
+}: {
+  completion: ApiCompletion;
+  completionId: string;
+  snapshot: AristotleJobStatusResult;
+  userId: string;
+}) {
   const requestMessages = completion.requestMessages as ApiCompletionMessage[];
   let creditsCharged = 0;
   let usagePromptTokens = 0;
@@ -716,6 +695,7 @@ export async function pollProgrammaticCompletion({
       costAccumulator,
     });
     creditsCharged += continuationCost;
+    const leanFileContent = getLeanCode(snapshot);
 
     const finalCompletion = snapshot.failed
       ? await failApiCompletionAfterFinalization({
@@ -732,8 +712,8 @@ export async function pollProgrammaticCompletion({
           id: completionId,
           userId,
           responseText: continuation.text,
-          leanFileName: `${snapshot.jobId}.lean`,
-          leanFileContent: getLeanCode(snapshot),
+          leanFileName: leanFileContent ? `${snapshot.jobId}.lean` : null,
+          leanFileContent,
           usagePromptTokens,
           usageCompletionTokens,
           creditsCharged,
@@ -770,4 +750,56 @@ export async function pollProgrammaticCompletion({
       ? await toApiCompletionResponse(finalCompletion)
       : null;
   }
+}
+
+export async function pollProgrammaticCompletion({
+  completionId,
+  userId,
+}: {
+  completionId: string;
+  userId: string;
+}) {
+  const completion = await getApiCompletionByIdForUser({
+    id: completionId,
+    userId,
+  });
+
+  if (!completion) {
+    return null;
+  }
+
+  if (shouldReturnPolledCompletion(completion)) {
+    return await toApiCompletionResponse(completion);
+  }
+
+  const snapshot = await checkAristotleJobStatus({
+    jobId: completion.aristotleJobId,
+    waitForCompletion: false,
+  });
+
+  if (!(snapshot.completed || snapshot.failed)) {
+    return await toApiCompletionResponse(completion);
+  }
+
+  const claim = await beginApiCompletionFinalization({
+    id: completionId,
+    userId,
+  });
+
+  if (!claim) {
+    const latestCompletion = await getApiCompletionByIdForUser({
+      id: completionId,
+      userId,
+    });
+    return latestCompletion
+      ? await toApiCompletionResponse(latestCompletion)
+      : null;
+  }
+
+  return await finalizePolledProgrammaticCompletion({
+    completion,
+    completionId,
+    snapshot,
+    userId,
+  });
 }
