@@ -96,9 +96,11 @@ function getApiAccessValue({
 }
 
 function getApiKeyActionContent({
+  hasError,
   hasKey,
   isPending,
 }: {
+  hasError: boolean;
   hasKey: boolean;
   isPending: boolean;
 }) {
@@ -107,6 +109,15 @@ function getApiKeyActionContent({
       <>
         <Loader2 className="size-4 animate-spin" />
         Updating key...
+      </>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <>
+        <KeyRound className="size-4" />
+        Create or rotate key
       </>
     );
   }
@@ -126,6 +137,38 @@ function getApiKeyActionContent({
       Create key
     </>
   );
+}
+
+function getApiKeyActionMetadata({
+  hasError,
+  hasKey,
+}: {
+  hasError: boolean;
+  hasKey: boolean;
+}) {
+  if (hasError) {
+    return {
+      title: "Create or rotate API key?",
+      description:
+        "Current API key status could not be loaded. Continuing will create a key if none exists, or rotate the existing key.",
+      label: "Continue",
+    };
+  }
+
+  if (hasKey) {
+    return {
+      title: "Rotate API key?",
+      description:
+        "The current key will stop working immediately. Make sure any existing scripts are updated.",
+      label: "Rotate key",
+    };
+  }
+
+  return {
+    title: "Create API key?",
+    description: "This creates the first API key for your account.",
+    label: "Create key",
+  };
 }
 
 function TerminalCommandBlock({ code }: { code: string }) {
@@ -242,9 +285,7 @@ export function ApiKeySettings() {
     : (apiAccessQuery.data?.hasKey ?? false);
   const isApiAccessError = apiAccessQuery.isError;
   const isRotateButtonDisabled =
-    rotateApiKeyMutation.isPending ||
-    apiAccessQuery.isLoading ||
-    isApiAccessError;
+    rotateApiKeyMutation.isPending || apiAccessQuery.isLoading;
   const currentKeyText = getCurrentKeyText({
     isError: isApiAccessError,
     isLoading: apiAccessQuery.isLoading,
@@ -279,6 +320,11 @@ export function ApiKeySettings() {
       toast.error("Failed to copy API key");
     }
   }
+
+  const keyActionMetadata = getApiKeyActionMetadata({
+    hasError: isApiAccessError,
+    hasKey,
+  });
 
   return (
     <SettingsPageContent className="gap-6">
@@ -340,6 +386,7 @@ export function ApiKeySettings() {
                   type="button"
                 >
                   {getApiKeyActionContent({
+                    hasError: isApiAccessError,
                     hasKey,
                     isPending: rotateApiKeyMutation.isPending,
                   })}
@@ -347,19 +394,15 @@ export function ApiKeySettings() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {hasKey ? "Rotate API key?" : "Create API key?"}
-                  </AlertDialogTitle>
+                  <AlertDialogTitle>{keyActionMetadata.title}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {hasKey
-                      ? "The current key will stop working immediately. Make sure any existing scripts are updated."
-                      : "This creates the first API key for your account."}
+                    {keyActionMetadata.description}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={handleRotateApiKey}>
-                    {hasKey ? "Rotate key" : "Create key"}
+                    {keyActionMetadata.label}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

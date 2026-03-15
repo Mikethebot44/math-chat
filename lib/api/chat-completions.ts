@@ -1,6 +1,8 @@
 import { convertToModelMessages, generateText } from "ai";
 import { z } from "zod";
+import { getAppModelDefinition } from "@/lib/ai/app-models";
 import { createCoreChatAgent } from "@/lib/ai/core-chat-agent";
+import { truncateModelMessagesToFitBudget } from "@/lib/ai/history-truncation";
 import { systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel, getModelProviderOptions } from "@/lib/ai/providers";
 import { DEFAULT_SCOUT_MODEL_ID } from "@/lib/ai/scout-models";
@@ -28,7 +30,6 @@ const log = createModuleLogger("api:chat-completions");
 
 const API_MODEL_NAME = "Scout";
 const API_ACTIVE_TOOLS = ["leanProof", "aristotleCheckJob"] as const;
-const API_MESSAGE_WINDOW = 5;
 
 export const apiCompletionMessageSchema = z.object({
   role: z.enum(["assistant", "system", "user"]),
@@ -338,10 +339,13 @@ function getLatestLeanToolSnapshot(parts: ChatMessage["parts"]) {
   return latestPart.output as LeanToolSnapshot;
 }
 
-function convertApiMessagesToModelMessages(messages: ChatMessage[]) {
-  return convertToModelMessages(messages.slice(-API_MESSAGE_WINDOW), {
+async function convertApiMessagesToModelMessages(messages: ChatMessage[]) {
+  const modelMessages = await convertToModelMessages(messages, {
     convertDataPart: (_part): undefined => undefined,
   });
+  const modelDefinition = await getAppModelDefinition(DEFAULT_SCOUT_MODEL_ID);
+
+  return truncateModelMessagesToFitBudget(modelMessages, modelDefinition);
 }
 
 async function executeInitialCompletion({
@@ -368,6 +372,7 @@ async function executeInitialCompletion({
       throw error;
     },
     costAccumulator,
+    useTokenAwareHistoryTruncation: true,
   });
 
   await result.consumeStream();

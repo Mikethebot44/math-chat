@@ -9,6 +9,7 @@ import { filterPartsForLLM } from "@/app/(chat)/api/chat/filter-reasoning-parts"
 import { getRecentGeneratedImage } from "@/app/(chat)/api/chat/get-recent-generated-image";
 import { type AppModelId, getAppModelDefinition } from "@/lib/ai/app-models";
 import { hasExplicitToolRestriction } from "@/lib/ai/determine-explicitly-requested-tools";
+import { truncateModelMessagesToFitBudget } from "@/lib/ai/history-truncation";
 import { markdownJoinerTransform } from "@/lib/ai/markdown-joiner-transform";
 import { getLanguageModel, getModelProviderOptions } from "@/lib/ai/providers";
 import { getMcpTools, getTools } from "@/lib/ai/tools/tools";
@@ -32,6 +33,7 @@ export async function createCoreChatAgent({
   onChunk,
   mcpConnectors = [],
   costAccumulator,
+  useTokenAwareHistoryTruncation = false,
 }: {
   system: string;
   userMessage: ChatMessage;
@@ -48,11 +50,14 @@ export async function createCoreChatAgent({
   onChunk?: () => void;
   mcpConnectors?: McpConnector[];
   costAccumulator: CostAccumulator;
+  useTokenAwareHistoryTruncation?: boolean;
 }) {
   const modelDefinition = await getAppModelDefinition(selectedModelId);
 
   // Build message thread
-  const messages = [...previousMessages, userMessage].slice(-5);
+  const messages = useTokenAwareHistoryTruncation
+    ? [...previousMessages, userMessage]
+    : [...previousMessages, userMessage].slice(-5);
 
   // Process conversation history
   const lastGeneratedImage = getRecentGeneratedImage(messages);
@@ -60,12 +65,15 @@ export async function createCoreChatAgent({
   addExplicitToolRequestToMessages(messages, explicitlyRequestedTools);
 
   // Filter reasoning parts (cross-model compatibility)
-  const filteredMessages = filterPartsForLLM(messages.slice(-5));
+  const filteredMessages = filterPartsForLLM(messages);
 
   // Convert to model messages, ignoring data-* parts (drop them)
-  const modelMessages = await convertToModelMessages(filteredMessages, {
+  const convertedMessages = await convertToModelMessages(filteredMessages, {
     convertDataPart: (_part): undefined => undefined,
   });
+  const modelMessages = useTokenAwareHistoryTruncation
+    ? truncateModelMessagesToFitBudget(convertedMessages, modelDefinition)
+    : convertedMessages;
 
   // Replace file URLs with binary data
   const contextForLLM =
@@ -103,10 +111,11 @@ export async function createCoreChatAgent({
   );
   // 2. Only add MCP tools when tool selection is not explicitly constrained.
   const mcpToolNames = Object.keys(mcpTools);
-  const activeMcpToolNames =
-    hasExplicitToolRestriction(explicitlyRequestedTools)
-      ? []
-      : mcpToolNames;
+  const activeMcpToolNames = hasExplicitToolRestriction(
+    explicitlyRequestedTools
+  )
+    ? []
+    : mcpToolNames;
   // 3. Build the final activeTools list (cast needed because MCP tools are dynamic)
   const activeTools = [
     ...new Set([...existingBaseActiveTools, ...activeMcpToolNames]),
