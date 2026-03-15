@@ -72,7 +72,9 @@ export async function createCoreChatAgent({
     convertDataPart: (_part): undefined => undefined,
   });
   const modelMessages = useTokenAwareHistoryTruncation
-    ? truncateModelMessagesToFitBudget(convertedMessages, modelDefinition)
+    ? truncateModelMessagesToFitBudget(convertedMessages, modelDefinition, {
+        system,
+      })
     : convertedMessages;
 
   // Replace file URLs with binary data

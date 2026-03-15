@@ -339,13 +339,21 @@ function getLatestLeanToolSnapshot(parts: ChatMessage["parts"]) {
   return latestPart.output as LeanToolSnapshot;
 }
 
-async function convertApiMessagesToModelMessages(messages: ChatMessage[]) {
+async function convertApiMessagesToModelMessages({
+  messages,
+  system,
+}: {
+  messages: ChatMessage[];
+  system: string;
+}) {
   const modelMessages = await convertToModelMessages(messages, {
     convertDataPart: (_part): undefined => undefined,
   });
   const modelDefinition = await getAppModelDefinition(DEFAULT_SCOUT_MODEL_ID);
 
-  return truncateModelMessagesToFitBudget(modelMessages, modelDefinition);
+  return truncateModelMessagesToFitBudget(modelMessages, modelDefinition, {
+    system,
+  });
 }
 
 async function executeInitialCompletion({
@@ -435,6 +443,7 @@ async function generateContinuationText({
       ].join(" ");
 
   const { previousMessages, userMessage } = buildChatMessages(messages);
+  const apiSystemPrompt = buildApiSystemPrompt(messages);
   const continuationRequest: ChatMessage = {
     id: generateUUID(),
     role: "user",
@@ -447,11 +456,10 @@ async function generateContinuationText({
     },
   };
 
-  const modelMessages = await convertApiMessagesToModelMessages([
-    ...previousMessages,
-    userMessage,
-    continuationRequest,
-  ]);
+  const modelMessages = await convertApiMessagesToModelMessages({
+    messages: [...previousMessages, userMessage, continuationRequest],
+    system: apiSystemPrompt,
+  });
   const [model, providerOptions] = await Promise.all([
     getLanguageModel(DEFAULT_SCOUT_MODEL_ID),
     getModelProviderOptions(DEFAULT_SCOUT_MODEL_ID),
@@ -459,7 +467,7 @@ async function generateContinuationText({
 
   const result = await generateText({
     model,
-    system: buildApiSystemPrompt(messages),
+    system: apiSystemPrompt,
     messages: modelMessages,
     providerOptions,
     experimental_telemetry: {
