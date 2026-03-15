@@ -10,6 +10,8 @@ interface LoaderProps {
   labelClassName?: string;
   labelShimmer?: boolean;
   subtitle?: ReactNode;
+  subtitleClassName?: string;
+  subtitleShimmer?: boolean;
 }
 
 export function Loader({
@@ -18,6 +20,8 @@ export function Loader({
   labelClassName,
   labelShimmer = false,
   subtitle = "Looking across math research papers",
+  subtitleClassName,
+  subtitleShimmer = false,
 }: LoaderProps) {
   return (
     <div
@@ -68,7 +72,27 @@ export function Loader({
           </p>
         )}
         {subtitle ? (
-          <div className="text-muted-foreground text-xs">{subtitle}</div>
+          subtitleShimmer ? (
+            <ShimmerText
+              className={cn(
+                "text-muted-foreground text-xs",
+                subtitleClassName
+              )}
+              delay={0}
+              duration={1.2}
+            >
+              {subtitle}
+            </ShimmerText>
+          ) : (
+            <div
+              className={cn(
+                "text-muted-foreground text-xs",
+                subtitleClassName
+              )}
+            >
+              {subtitle}
+            </div>
+          )
         ) : null}
       </div>
     </div>
