@@ -772,8 +772,13 @@ export async function pollProgrammaticCompletion({
     return await toApiCompletionResponse(completion);
   }
 
+  const jobId = completion.aristotleJobId;
+  if (!jobId) {
+    return await toApiCompletionResponse(completion);
+  }
+
   const snapshot = await checkAristotleJobStatus({
-    jobId: completion.aristotleJobId,
+    jobId,
     waitForCompletion: false,
   });
 
